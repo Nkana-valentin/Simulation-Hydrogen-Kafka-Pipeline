@@ -1,0 +1,29 @@
+# TSDB.yml - Configuration for QuestDB, Kafka, and SISSA API
+questdb:
+  host: "localhost"
+  port: 9000
+  username: "admin"
+  password: "quest"
+  database: "qdb"
+  
+  tables:
+    hydrogen_data:
+      create_sql: |
+        CREATE TABLE IF NOT EXISTS hydrogen_data (
+          timestamp TIMESTAMP,
+          lab SYMBOL,
+          sensor SYMBOL,
+          measurement_type SYMBOL,
+          value DOUBLE
+        ) TIMESTAMP(timestamp) PARTITION BY DAY;
+
+kafka:
+  bootstrap_servers: "localhost:9092"
+  topics:
+    raw_data: "h2_lab_raw"
+    validated_data: "h2_lab_data"
+  
+sissa:
+  api_endpoint: "https://sissa-hydor.example.com/api"
+  sync_interval: "30s"  # Sync every 30 seconds
+  auth_token: "${SISSA_API_TOKEN}"
