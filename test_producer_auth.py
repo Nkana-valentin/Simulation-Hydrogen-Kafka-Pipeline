@@ -11,21 +11,26 @@ import random
 import requests
 from kafka import KafkaProducer
 import sys
+from fastapi import status
 
 # Configuration
-AUTH_URL = "http://localhost:8001"
+AUTH_URL = "http://localhost:8000"
 KAFKA_BOOTSTRAP = "localhost:9092"
 
 def get_device_token(device_id, device_secret):
-    """Get JWT token from auth service"""
+    """
+    Get JWT token from auth service
+    """
     print(f"🔑 Getting token for device: {device_id}")
     
     response = requests.post(
-        f"{AUTH_URL}/auth/device/login",
+        f"{AUTH_URL}/device/login",
         json={"device_id": device_id, "device_secret": device_secret}
     )
     
-    if response.status_code == 200:
+    #print(f"📨 Auth response: {response.status_code} - {response.text}")
+    
+    if response.status_code == status.HTTP_201_CREATED:
         token_data = response.json()
         print(f"✅ Token received (expires in {token_data['expires_in']}s)")
         return token_data["access_token"], token_data["identity"]
