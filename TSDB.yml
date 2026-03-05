@@ -27,3 +27,7 @@ sissa:
   api_endpoint: "https://sissa-hydor.example.com/api"
   sync_interval: "30s"  # Sync every 30 seconds
   auth_token: "${SISSA_API_TOKEN}"
+  #api_base_url: ${SISSA_API_URL:https://api.sissa-hydor.it/v1}
+  allowed_ips:
+    - 193.xxx.0.0/16
+    - 2001:xxx::/32
