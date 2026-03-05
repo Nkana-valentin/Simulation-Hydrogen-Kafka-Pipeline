@@ -36,3 +36,15 @@ security:
   api_keys:
     sissa_hydor_01: ${SISSA_API_KEY_1}
     sissa_hydor_02: ${SISSA_API_KEY_2}    
+
+remote_sync:
+  enabled: false  # Set to true to enable
+  method: "api"   # "api", "ssh", or "both"
+  api_endpoint: "http://other-computer:8000/api/data"
+  api_token: "your-token-here"
+  ssh:
+    host: "other-computer.local"
+    username: "your-username"
+    password: "your-password"  # Optional, use key if possible
+    key_path: "/path/to/ssh/key"
+    path: "/home/username/synced_data"    
