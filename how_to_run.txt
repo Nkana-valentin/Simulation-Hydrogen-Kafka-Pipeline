@@ -1,0 +1,14 @@
+# First step
+docker compose up -d
+
+
+# 2nd step
+uvicorn auth_server:app --reload
+
+# 3rd step
+
+python3 test_producer_auth.py
+
+# 4th step
+
+python3 json_to_TSDB.py

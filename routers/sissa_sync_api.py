@@ -52,7 +52,9 @@ def _process_successful_batch(
     batch_size: int,
     data_type: Optional[str],
 ) -> dict:
-    """Save batch, update state, and return final response (only called on success)."""
+    """
+    Save batch, update state, and return final response (only called on success).
+    """
     researcher_id = researcher["user_id"]
     researcher_name = researcher["username"]
     institution = researcher.get("institution")
