@@ -23,16 +23,52 @@ kafka:
     raw_data: "h2_lab_raw"
     validated_data: "h2_lab_data"
   
-sissa:
-  api_endpoint: "https://sissa-hydor.example.com/api"
-  sync_interval: "30s"  # Sync every 30 seconds
-  auth_token: "${SISSA_API_TOKEN}"
-  #api_base_url: ${SISSA_API_URL:https://api.sissa-hydor.it/v1}
-  allowed_ips:
-    - 193.xxx.0.0/16
-    - 2001:xxx::/32
     
 security:
   api_keys:
     sissa_hydor_01: ${SISSA_API_KEY_1}
     sissa_hydor_02: ${SISSA_API_KEY_2}    
+  
+
+
+remote_sync:
+  enabled: true
+  method: ssh
+  ssh:
+    # Use one of these IPs (10.128.2.80 is usually best)
+    host: 195.14.102.215
+    # Alternative: host: 10.128.4.15
+    # Alternative: host: 10.128.6.80
+    username: vnkanang
+    password: "your-password"  # Option 1 (not recommended)
+    # Your home directory path
+    #path: "/u/mdmc/vnkanang/synced_data"
+    #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
+    #key_path: /home/valentinnkana/.ssh/id_rsa
+    # OR if you have scratch access
+    path: /scratch/synced_data  
+  # BATCH CONFIGURATION
+  BATCH_SIZE: 50  # Wait until we have 50 records before syncing
+
+
+# remote_sync:
+#   api_endpoint: ''
+#   api_token: ''
+#   enabled: true
+#   method: ssh
+#   ssh:
+#     host: 192.168.1.23
+#     password: "your-password"  # Option 1 (not recommended)
+#     username: valentinnkana
+#     #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
+#     key_path: /home/valentinnkana/.ssh/id_ed25519  # Your ED25519 key
+#     path: "/home/valentinnkana/synced_data"
+#     allow_agent: false  # Don't use SSH agent
+#     look_for_keys: false  # Don't look for SSH keys
+    
+
+sissa:
+  api_endpoint: https://sissa-hydor.example.com/api
+  auth_token: ${SISSA_API_TOKEN}
+  auto_sync: true
+  sync_interval: 30s

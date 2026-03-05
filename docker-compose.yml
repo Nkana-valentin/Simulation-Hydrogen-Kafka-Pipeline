@@ -41,11 +41,11 @@ services:
       - ./questdb_data:/var/lib/questdb
 
   # NEW: Authentication Service
-  auth-service:
-    build: ./auth_service
-    container_name: auth-service
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./auth_service:/app
-    command: uvicorn auth_server:app --host 0.0.0.0 --port 8001 --reload
+  # auth-service:
+  #   build: ./auth_service
+  #   container_name: auth-service
+  #   ports:
+  #     - "8001:8001"
+  #   volumes:
+  #     - ./auth_service:/app
+  #   command: uvicorn auth_server:app --host 0.0.0.0 --port 8001 --reload

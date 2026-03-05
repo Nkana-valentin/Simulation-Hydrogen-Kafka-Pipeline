@@ -3,36 +3,59 @@
 Authentication Service for Hydrogen Research Pipeline
 JWT Token Issuance and Verification
 """
-from turtle import title
 
 from fastapi import FastAPI
-#from fastapi.security import HTTPBearer
-from routers import authentication, sissa_sync_api
+from fastapi.security import HTTPBearer
+from apps import researcher_sync_app, sissa_auto_sync_app, authentication
+from contextlib import asynccontextmanager
+import asyncio
+import logging
+from apps.sync_helpers import SyncHelpers
+
+logger = logging.getLogger(__name__)
+sync_helpers = SyncHelpers()
 
 
-# ========================
-# FastAPI App
-# ========================
-app = FastAPI(title="ORFEO-SISSA Synchronization API",
-    description="API for synchronizing H2 laboratory data between ORFEO and SISSA Hydor",
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Start and stop background sync task with app lifecycle
+    """
+    global sync_task
+    
+    logger.info("🚀 Auto-sync app starting up...")
+    
+    # Load configuration
+    BATCH_SIZE = sync_helpers.config.get('sissa', {}).get('batch_size', 100)
+    
+    # Start background sync worker
+    sync_task = asyncio.create_task(sissa_auto_sync_app.sync_worker())
+    logger.info(f"🔄 Background sync worker started (batch size: {BATCH_SIZE})")
+    
+    yield
+    
+    # Cleanup on shutdown
+    if sync_task:
+        sync_task.cancel()
+        try:
+            await sync_task
+            logger.info("🛑 Background sync worker stopped")
+        except asyncio.CancelledError:
+            logger.info("Background sync worker cancelled")
+
+
+# ===================================
+# Main FastAPI App (Authentication)
+# ===================================
+app = FastAPI(
+    title="ORFEO-Hydor Authentication API",
+    description="Authentication service for H2 laboratory data synchronization",
     version="1.0.0",
-    docs_url="/docs")
+    lifespan=lifespan
+)
 
+
+app.include_router(researcher_sync_app.router)
+app.include_router(sissa_auto_sync_app.router)
 app.include_router(authentication.router)
-app.include_router(sissa_sync_api.router)
 
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     print("\n" + "=" * 60)
-#     print("🔐 HYDROGEN LAB AUTHENTICATION SERVICE")
-#     print("=" * 60)
-#     print("Starting on http://localhost:8001")
-#     print("\n📚 API Documentation: http://localhost:8001/docs")
-#     print("\n✅ Test credentials:")
-#     print("   Device:     pressure_sensor_01 / sensor123")
-#     print("   Device:     flow_sensor_02 / flow456")
-#     print("   Researcher: dr_smith / research2024 (APSU)")
-#     print("   Researcher: dr_jones / hydrogen2024 (MFI)")
-#     print("=" * 60 + "\n")
-#     uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

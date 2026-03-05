@@ -63,7 +63,9 @@ def is_authenticated(data):
     return True
 
 def transform_to_influx_line(data):
-    """Convert authenticated JSON to InfluxDB line protocol"""
+    """
+    Convert authenticated JSON to InfluxDB line protocol
+    """
     try:
         auth = data['auth']
         
@@ -92,7 +94,9 @@ def transform_to_influx_line(data):
         return None
 
 def send_to_questdb(lines):
-    """Send batch to QuestDB"""
+    """
+    Send batch to QuestDB
+    """
     if not lines:
         return
     
