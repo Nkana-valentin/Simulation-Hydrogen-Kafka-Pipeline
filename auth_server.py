@@ -3,6 +3,8 @@
 Authentication Service for Hydrogen Research Pipeline
 JWT Token Issuance and Verification
 """
+from turtle import title
+
 from fastapi import FastAPI
 #from fastapi.security import HTTPBearer
 from routers import authentication, sissa_sync_api
@@ -11,7 +13,10 @@ from routers import authentication, sissa_sync_api
 # ========================
 # FastAPI App
 # ========================
-app = FastAPI(title="Hydrogen Lab Authentication Service")
+app = FastAPI(title="ORFEO-SISSA Synchronization API",
+    description="API for synchronizing H2 laboratory data between ORFEO and SISSA Hydor",
+    version="1.0.0",
+    docs_url="/docs")
 
 app.include_router(authentication.router)
 app.include_router(sissa_sync_api.router)
