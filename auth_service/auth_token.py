@@ -66,5 +66,32 @@ def get_current_researcher(
                             "Authentication failed")
         )
     return result["payload"]
+
+
+# =================================
+# Admin Authentication Helper
+# =================================
+def get_admin_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """
+    Ensure user is admin
+    """
+    token = credentials.credentials
+    result = verify_researcher_token(token)
+    
+    if not result["valid"]:
+        raise HTTPException(
+            status_code=401,
+            detail=result.get("reason", "Authentication failed")
+        )
+    
+    user = result["payload"]
+    if "admin" not in user.get("roles", []):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+    
+    return user
     
     

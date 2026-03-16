@@ -1,6 +1,7 @@
 # apps/researcher_sync_app.py
 """
-Researcher Sync API - For researchers to manually sync their authorized data
+Researcher Sync API - 
+For researchers to manually sync their authorized data
 """
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
 from datetime import datetime
@@ -8,8 +9,8 @@ from typing import Optional, Dict, List, Any
 import logging
 
 # Import your existing sync_utils and helpers
-from .sync_helpers import SyncHelpers
-from auth_service.auth_token import verify_researcher_token
+from apps.sync_helpers import SyncHelpers
+from auth_service.auth_token import verify_researcher_token, get_current_researcher
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # Setup logging
@@ -22,37 +23,9 @@ sync_helpers = SyncHelpers()
 security = HTTPBearer()
 
 
-# ==============================
-# Helper functions for this app
-# ===============================
-def get_current_researcher(
-    credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
-    """
-    Get current researcher from token
-    """
-    token = credentials.credentials
-    result = verify_researcher_token(token)
-    if not result["valid"]:
-        raise HTTPException(
-            status_code=401,
-            detail=result.get("reason", "Authentication failed")
-        )
-    return result["payload"]
-
-
-# ================================
-# Create the Researcher Sync App
-# ================================
-researcher_app = FastAPI(
-    title="Researcher Data Sync API",
-    description="API for researchers to manually sync their authorized H2 laboratory data",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
 # Create router for endpoints
-router = APIRouter(tags=['Researcher Sync'])
+router = APIRouter(prefix="/researcher-sync", 
+                tags=['Researcher Sync'])
 
 
 # ========================
@@ -248,14 +221,10 @@ async def get_researcher_progress(
     }
 
 
-# Include router in the app
-researcher_app.include_router(router, prefix="/api")
-
-
 # ========================
 # Debug Endpoints (Admin only)
 # ========================
-@researcher_app.get("/debug/token-info")
+@router.get("/debug/token-info")
 async def debug_token_info(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
@@ -269,7 +238,7 @@ async def debug_token_info(
         return {"valid": False, "reason": result.get("reason")}
 
 
-@researcher_app.get("/debug/researcher-state/{researcher_id}")
+@router.get("/debug/researcher-state/{researcher_id}")
 async def debug_researcher_state(
     researcher_id: str,
     current_researcher: Dict = Depends(get_current_researcher)
@@ -289,11 +258,11 @@ async def debug_researcher_state(
     }
 
 
-# Health check for this app
-@researcher_app.get("/health")
-async def health_check():
-    return {
-        "app": "researcher-sync",
-        "status": "running",
-        "timestamp": datetime.now().isoformat()
-    }
+# # Health check for this app
+# @router.get("/health")
+# async def health_check():
+#     return {
+#         "app": "researcher-sync",
+#         "status": "running",
+#         "timestamp": datetime.now().isoformat()
+#     }

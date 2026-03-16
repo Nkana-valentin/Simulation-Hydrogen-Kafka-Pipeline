@@ -58,7 +58,9 @@ class SyncHelpers:
             return {"questdb": {"host": "localhost", "port": 9000}}
     
     def _ensure_directories(self):
-        """Create required directories if they don't exist"""
+        """
+        Create required directories if they don't exist
+        """
         self.SYNC_DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.SYNC_STATE_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -67,13 +69,17 @@ class SyncHelpers:
     # ========================
     
     def get_researcher_state_file(self, researcher_id: str) -> Path:
-        """Get path to researcher's state file"""
+        """
+        Get path to researcher's state file
+        """
         safe_id = researcher_id.replace("@", "_at_").replace(".", "_dot_")
         return self.SYNC_STATE_DIR / f"{safe_id}_sync_state.json"
     
     def get_researcher_sync_state(self, researcher_id: str, 
-                                  data_type: Optional[str] = None) -> Dict[str, Any]:
-        """Get sync state for a researcher"""
+                    data_type: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get sync state for a researcher
+        """
         state_file = self.get_researcher_state_file(researcher_id)
         
         if not state_file.exists():
@@ -109,7 +115,9 @@ class SyncHelpers:
                                     institution: str, 
                                     data_type: str, 
                                     batch_info: Dict[str, Any]):
-        """Update sync state for a researcher after successful batch"""
+        """
+        Update sync state for a researcher after successful batch
+        """
         state_file = self.get_researcher_state_file(researcher_id)
         
         if state_file.exists():
@@ -164,11 +172,15 @@ class SyncHelpers:
     # QuestDB Helper Methods
     # ========================
     
-    def check_table_exists(self, table_name: str = "hydrogen_data") -> bool:
-        """Check if a table exists in QuestDB"""
+    def check_table_exists(self, 
+                    table_name: str = "hydrogen_data") -> bool:
+        """
+        Check if a table exists in QuestDB
+        """
         try:
             query = f"SELECT * FROM {table_name} LIMIT 1"
-            response = requests.get(self.QUESTDB_QUERY_URL, params={"query": query})
+            response = requests.get(self.QUESTDB_QUERY_URL, 
+                                params={"query": query})
             
             if response.status_code == 200:
                 logger.info(f"Table '{table_name}' exists")
@@ -184,7 +196,9 @@ class SyncHelpers:
             return False
     
     def build_data_access_filter(self, data_access: List[str]) -> str:
-        """Build SQL filter from data access permissions"""
+        """
+        Build SQL filter from data access permissions
+        """
         if not data_access:
             return "1=0"
         if "all" in data_access:
@@ -306,7 +320,9 @@ class SyncHelpers:
             }
     
     def _parse_questdb_response(self, result: Dict) -> List[Dict]:
-        """Parse QuestDB response into list of dictionaries"""
+        """
+        Parse QuestDB response into list of dictionaries
+        """
         records = []
         
         try:
@@ -511,7 +527,9 @@ class SyncHelpers:
     # ========================
     
     def get_last_sync_timestamp(self) -> Optional[str]:
-        """Get the timestamp of the last synced record from file"""
+        """
+        Get the timestamp of the last synced record from file
+        """
         if self.SYNC_STATE_FILE.exists():
             try:
                 with open(self.SYNC_STATE_FILE, 'r') as f:
@@ -526,7 +544,9 @@ class SyncHelpers:
         return None
     
     def save_last_sync_timestamp(self, timestamp: str):
-        """Save the timestamp of the last synced record"""
+        """
+        Save the timestamp of the last synced record
+        """
         try:
             with open(self.SYNC_STATE_FILE, 'w') as f:
                 f.write(timestamp)
@@ -543,7 +563,9 @@ class SyncHelpers:
                         data_access: List[str],
                         data_type: Optional[str],
                         batch_size: int) -> dict:
-        """Fetch the next batch of data for the researcher (no side effects)"""
+        """
+        Fetch the next batch of data for the researcher (no side effects)
+        """
         full_state = self.get_researcher_sync_state(researcher_id)
         
         if data_type:
@@ -566,7 +588,8 @@ class SyncHelpers:
                                 batch_size: int,
                                 data_type: Optional[str]) -> dict:
         """
-        Save batch, update state, and return final response (only called on success)
+        Save batch, update state, and return final 
+        response (only called on success)
         """
         researcher_id = researcher["user_id"]
         researcher_name = researcher["username"]
