@@ -3,13 +3,13 @@
 Researcher Sync API - 
 For researchers to manually sync their authorized data
 """
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict
 import logging
 
 # Import your existing sync_utils and helpers
-from apps.sync_helpers import SyncHelpers
+from synchronization.sync_helpers import SyncHelpers
 from auth_service.auth_token import verify_researcher_token, get_current_researcher
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -22,10 +22,8 @@ logger = logging.getLogger(__name__)
 sync_helpers = SyncHelpers()
 security = HTTPBearer()
 
-
 # Create router for endpoints
 router = APIRouter(tags=['Researcher Sync'])
-
 
 # ========================
 # Researcher Sync Endpoints

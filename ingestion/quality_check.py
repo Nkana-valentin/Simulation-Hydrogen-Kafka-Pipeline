@@ -6,7 +6,7 @@ Validates JSON data before ingestion into QuestDB.
 import pandas as pd
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Tuple, Optional
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel
 from enum import Enum
 import structlog
 import numpy as np

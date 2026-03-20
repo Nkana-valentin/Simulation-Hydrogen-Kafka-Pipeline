@@ -3,23 +3,24 @@
 Automatic SISSA Sync API - FastAPI endpoints for controlling the sync service
 """
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import logging
 import yaml
 import glob
 import socket
 from pathlib import Path
+import paramiko
 
 # Import helpers and worker functions
-from apps.sync_helpers import SyncHelpers
-from apps.hydor_auto_sync_worker import (sync_worker, 
+from synchronization.sync_helpers import SyncHelpers
+from synchronization.hydor_auto_sync_worker import (sync_worker, 
                                     sync_new_data_batch, 
                                     check_for_new_data_async,
                                     sync_to_remote, 
                                     BATCH_SIZE)
 from auth_service.auth_token import get_admin_user
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -118,7 +119,6 @@ async def test_ssh_connection(
     """
     Test SSH connection to remote host
     """
-    import paramiko
     
     ssh_config = sync_helpers.config.get('remote_sync', {}).get('ssh', {})
     remote_host = ssh_config.get('host', '')

@@ -84,7 +84,6 @@ class QuestDBClient:
             if response.status_code == 200:
                 logger.info(f"Table {table_name} exists and is accessible")
                 result = response.json()
-                logger.info(f"Total records: {result.get('count', 0)} ")
                 return result.get('count', 0) > 0
             else:
                 logger.error(f"❌ HTTP error {response.status_code}: {response.text}")

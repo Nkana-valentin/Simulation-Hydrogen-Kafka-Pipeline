@@ -5,14 +5,13 @@ JWT Token Issuance and Verification
 """
 from fastapi import FastAPI
 from fastapi.security import HTTPBearer
-from apps.routers import researcher_sync_app
-from apps import hydor_auto_sync_worker
-from apps.routers import authentication
-from apps.routers import hydor_auto_sync_api
+from synchronization import hydor_auto_sync_worker
+from routers import authentication, hydor_auto_sync_api, researcher_sync_app
+
 from contextlib import asynccontextmanager
 import asyncio
 import logging
-from apps.sync_helpers import SyncHelpers
+from synchronization.sync_helpers import SyncHelpers
 
 logger = logging.getLogger(__name__)
 sync_helpers = SyncHelpers()
