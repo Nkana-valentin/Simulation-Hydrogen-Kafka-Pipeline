@@ -13,7 +13,6 @@ from contextlib import asynccontextmanager
 import asyncio
 import logging
 from apps.sync_helpers import SyncHelpers
-from apps.table_manager import TableManager
 
 logger = logging.getLogger(__name__)
 sync_helpers = SyncHelpers()
@@ -52,7 +51,7 @@ async def lifespan(app: FastAPI):
 # ===================================
 app = FastAPI(
     title="ORFEO-Hydor Authentication API",
-    description="Authentication service for H2 laboratory data synchronization",
+    description="H2 laboratory data synchronization",
     version="1.0.0",
     lifespan=lifespan
 )
