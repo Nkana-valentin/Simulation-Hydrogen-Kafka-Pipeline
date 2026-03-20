@@ -67,7 +67,8 @@ class Json2TsdbTransformer:
             
             # Construct line protocol
             line_protocol = f"{self.table_name},{tag_string} {field_string} {timestamp_ns}"
-            logger.info(f"✅ Successfully transformed {data} to {line_protocol}")
+            #logger.info(f"✅ Successfully transformed {data} to {line_protocol}")
+            logger.info(f"✅ Successfully transformed the data")
             #logger.debug(f"📝 Line protocol: {line_protocol}")
             return line_protocol
             

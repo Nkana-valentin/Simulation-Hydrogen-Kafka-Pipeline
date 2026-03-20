@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Union
 import math
+from ingestion.questdbclient import QuestDBClient
 
 # Setup logging
 logging.basicConfig(
@@ -19,22 +20,23 @@ logger = logging.getLogger(__name__)
 
 class SyncHelpers:
     """
-    Unified helper class for SISSA synchronization system
-    Combines researcher-specific sync utilities and system-wide sync functions
+    Unified helper class for remote synchronization system
+    Combines researcher-specific sync utilities and 
+    system-wide sync functions
     """
     
-    def __init__(self, config_path: str = "TSDB.yml"):
+    def __init__(self, 
+                config_path: str = "TSDB.yml"):
         """
         Initialize sync helpers with configuration
-        
         Args:
             config_path: Path to YAML configuration file
         """
         self.config_path = config_path
         self.config = self._load_config()
-        
         # QuestDB configuration
         self.QUESTDB_QUERY_URL = f"http://{self.config['questdb']['host']}:{self.config['questdb']['port']}/exec"
+        self.questdb_client = QuestDBClient()
         
         # Directory structure
         self.BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,7 +51,9 @@ class SyncHelpers:
         logger.info(f"   State files → {self.SYNC_STATE_DIR.resolve()}")
     
     def _load_config(self) -> Dict:
-        """Load configuration from YAML file"""
+        """
+        Load configuration from YAML file
+        """
         try:
             with open(self.config_path) as f:
                 return yaml.safe_load(f)
@@ -168,32 +172,6 @@ class SyncHelpers:
         
         logger.info(f"✅ Updated sync state for {researcher_id} - {data_type}")
     
-    # ========================
-    # QuestDB Helper Methods
-    # ========================
-    
-    def check_table_exists(self, 
-                    table_name: str = "hydrogen_data") -> bool:
-        """
-        Check if a table exists in QuestDB
-        """
-        try:
-            query = f"SELECT * FROM {table_name} LIMIT 1"
-            response = requests.get(self.QUESTDB_QUERY_URL, 
-                                params={"query": query})
-            
-            if response.status_code == 200:
-                logger.info(f"Table '{table_name}' exists")
-                return True
-            elif response.status_code == 400:
-                error_text = response.json().get('error', '')
-                if 'table does not exist' in error_text.lower():
-                    logger.warning(f"Table '{table_name}' does not exist")
-                    return False
-            return True
-        except Exception as e:
-            logger.error(f"Error checking table: {str(e)}")
-            return False
     
     def build_data_access_filter(self, data_access: List[str]) -> str:
         """
@@ -209,15 +187,18 @@ class SyncHelpers:
     def query_researcher_data_batch(self,
                                 researcher_id: str,
                                 data_access: List[str],
-                                data_type: Optional[str] = None,
-                                batch_size: int = 100,
-                                offset: int = 0,
-                                table_name: str = "hydrogen_data") -> Dict[str, Any]:
+                                data_type: Optional[str],
+                                batch_size: int,
+                                offset: int,
+                                table_name: str) -> Dict[str, Any]:
         """
         Query data for a specific researcher with access controls
         """
-        if not self.check_table_exists(table_name):
-            return {"records": [], "total_count": 0, "has_more": False, "offset": offset}
+        logger.info(f"\n 🔍 Querying data for researcher: {researcher_id}")
+        if not self.questdb_client.check_table_exists(table_name):
+            return {"records": [], "total_count": 0, 
+                    "has_more": False, 
+                    "offset": offset}
         
         try:
             # Get researcher's sync state for this data type
@@ -228,7 +209,9 @@ class SyncHelpers:
             if data_type:
                 if data_type not in data_access and "all" not in data_access:
                     logger.warning(f"⚠️ Researcher {researcher_id} does not have access to {data_type}")
-                    return {"records": [], "total_count": 0, "has_more": False, "offset": current_offset}
+                    return {"records": [], "total_count": 0, 
+                            "has_more": False, 
+                            "offset": current_offset}
                 access_filter = f"measurement_type = '{data_type}'"
             else:
                 access_filter = self.build_data_access_filter(data_access)
@@ -241,7 +224,8 @@ class SyncHelpers:
             """
             
             logger.info(f"📊 Count query: {count_query}")
-            count_response = requests.get(self.QUESTDB_QUERY_URL, params={"query": count_query})
+            count_response = requests.get(self.QUESTDB_QUERY_URL, 
+                                    params={"query": count_query})
             
             total_count = 0
             if count_response.status_code == 200:
@@ -254,14 +238,14 @@ class SyncHelpers:
             # Try different pagination syntaxes
             queries_to_try = [
                 f"""
-                SELECT timestamp, lab, sensor_id, measurement_type, unit, value
+                SELECT *
                 FROM {table_name}
                 WHERE {access_filter}
                 ORDER BY timestamp ASC, sensor_id ASC
                 LIMIT {batch_size} OFFSET {current_offset}
                 """,
                 f"""
-                SELECT timestamp, lab, sensor_id, measurement_type, unit, value
+                SELECT *
                 FROM {table_name}
                 WHERE {access_filter}
                 ORDER BY timestamp ASC, sensor_id ASC
@@ -274,7 +258,8 @@ class SyncHelpers:
             
             for query in queries_to_try:
                 logger.info(f"🔍 Trying query: {query}")
-                response = requests.get(self.QUESTDB_QUERY_URL, params={"query": query})
+                response = requests.get(self.QUESTDB_QUERY_URL, 
+                                        params={"query": query})
                 
                 if response.status_code == 200:
                     successful_query = query
@@ -673,12 +658,13 @@ class SyncHelpers:
         
         return response
     
-    def check_for_new_data(self, table_name: str = "hydrogen_data") -> Dict[str, Any]:
+    def check_for_new_data(self, table_name: str="raw_h2_data") -> Dict[str, Any]:
         """
         Check if there's new data since last sync
         Returns info about new data including count
         """
-        if not self.check_table_exists(table_name):
+        logger.info(f"\n 🔍 Checking for new data in table: {table_name}")
+        if not self.questdb_client.check_table_exists(table_name):
             return {"has_new_data": False, "message": "Table does not exist"}
         
         try:

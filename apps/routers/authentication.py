@@ -17,8 +17,7 @@ RESEARCHER_MAP: dict = {
     for r in registry.REGISTRY["researchers"]
 }
 # Create router
-router = APIRouter(prefix="/authentication", 
-                tags=['Authentication'])
+router = APIRouter(tags=['Authentication'])
 
 
 @router.post("/device/login", 

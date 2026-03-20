@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#ingestion/test_producer_auth.py
 """
 Authenticated Test Producer for Hydrogen Lab
 - Gets JWT token from auth service
@@ -112,8 +112,8 @@ try:
         }
         
         # Send to Kafka
-        producer.send(topic='h2_lab_raw', key=device["id"].encode(), value=data)
-        producer.send(topic='h2_lab_data', key=device["id"].encode(), value=data)
+        producer.send(topic='raw_h2_data', key=device["id"].encode(), value=data)
+        #producer.send(topic='h2_lab_data', key=device["id"].encode(), value=data)
         producer.flush()
         
         message_count += 1

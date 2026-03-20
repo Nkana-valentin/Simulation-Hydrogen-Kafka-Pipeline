@@ -3,7 +3,7 @@
 Automatic SISSA Sync Worker - Background sync worker logic
 """
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import asyncio
 import logging
 import requests
@@ -13,7 +13,7 @@ import glob
 
 # Import helpers
 from .sync_helpers import SyncHelpers
-from ingestion.query_builder import DataQueryBuilder
+from ingestion.questdbclient import QuestDBClient
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, 
@@ -22,15 +22,17 @@ logger = logging.getLogger(__name__)
 
 # Initialize helpers
 sync_helpers = SyncHelpers()
-data_query_builder = DataQueryBuilder()
+#table_name = sync_helpers.config.get('sissa', {}).get('table_name', 'raw_hydrogen_data')
+#table_name = "raw_h2_data"  # Default table name
+#table_name = sync_helpers.config.get('sissa', {}).get('table_name', table_name)
+questdbclient = QuestDBClient()
 
 # Global variables
 BATCH_SIZE = 50  # Default batch size
 
-
-# ========================
+# =============================
 # Background Worker Functions
-# ========================
+# =============================
 async def sync_worker():
     """
     Background worker that checks for new data periodically
@@ -143,11 +145,11 @@ async def sync_new_data_batch() -> Dict[str, Any]:
         
         # Query the new data
         if last_timestamp:
-            query = data_query_builder.build_query(
+            query = questdbclient.build_query(
                 last_timestamp=last_timestamp, batch_size=BATCH_SIZE)
         else:
             # First sync - get all data up to BATCH_SIZE
-            query = data_query_builder.build_query(batch_size=BATCH_SIZE)
+            query = questdbclient.build_query(batch_size=BATCH_SIZE)
         
         logger.info(f"Executing query to get up to {BATCH_SIZE} new records")
         response = requests.get(sync_helpers.QUESTDB_QUERY_URL, 

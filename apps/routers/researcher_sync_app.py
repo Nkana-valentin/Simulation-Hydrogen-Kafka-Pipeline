@@ -24,8 +24,7 @@ security = HTTPBearer()
 
 
 # Create router for endpoints
-router = APIRouter(prefix="/researcher-sync", 
-                tags=['Researcher Sync'])
+router = APIRouter(tags=['Researcher Sync'])
 
 
 # ========================
@@ -221,14 +220,16 @@ async def get_researcher_progress(
     }
 
 
-# ========================
+# ==============================
 # Debug Endpoints (Admin only)
-# ========================
+# ==============================
 @router.get("/debug/token-info")
 async def debug_token_info(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Debug endpoint to check token info"""
+    """
+    Debug endpoint to check token info
+    """
     token = credentials.credentials
     result = verify_researcher_token(token)
     
@@ -243,7 +244,9 @@ async def debug_researcher_state(
     researcher_id: str,
     current_researcher: Dict = Depends(get_current_researcher)
 ):
-    """Debug endpoint to view researcher sync state (admin only)"""
+    """
+    Debug endpoint to view researcher sync state (admin only)
+    """
     if "admin" not in current_researcher.get("roles", []):
         raise HTTPException(status_code=403, detail="Admin access required")
     

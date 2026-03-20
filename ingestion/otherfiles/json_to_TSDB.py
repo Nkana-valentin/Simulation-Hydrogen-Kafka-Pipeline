@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# ingestion/json_to_TSDB.py
 """
 json_to_TSDB.py - Kafka Consumer with JWT verification
 Only processes messages that are properly authenticated
@@ -6,21 +6,28 @@ Only processes messages that are properly authenticated
 import json
 import requests
 import time
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaAdminClient
+import logging
 from datetime import datetime
 import sys
 
 # Configuration
 KAFKA_BOOTSTRAP = ['localhost:9092']
 QUESTDB_URL = "http://localhost:9000/write"
-TOPIC = 'h2_lab_data'
+TOPIC = 'raw_h2_data'
 
 BATCH_SIZE = 10
 FLUSH_INTERVAL = 5
+logger = logging.getLogger(__name__)
 
 def create_consumer():
-    """Create Kafka consumer"""
+    """
+    Create Kafka consumer
+    """
+    #print(f" 🔌 Connecting to Kafka at {KAFKA_BOOTSTRAP}...")
     try:
+        #admin_client = KafkaAdminClient(bootstrap_servers=KAFKA_BOOTSTRAP)
+        #topics = admin_client.list_topics()
         consumer = KafkaConsumer(
             TOPIC,
             bootstrap_servers=KAFKA_BOOTSTRAP,
@@ -29,7 +36,7 @@ def create_consumer():
             group_id='questdb-consumer',
             enable_auto_commit=True
         )
-        print(f"✅ Connected to Kafka topic: {TOPIC}")
+        print(f" 🔌 Connected to Kafka topic: {TOPIC}")
         return consumer
     except Exception as e:
         print(f"❌ Kafka connection failed: {e}")

@@ -16,7 +16,7 @@ from pathlib import Path
 from .sync_helpers import SyncHelpers
 from auth_service.auth_token import verify_researcher_token
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from ingestion.query_builder import DataQueryBuilder
+from ingestion.questdbclient import QuestDBClient
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Initialize helpers
 sync_helpers = SyncHelpers()
 security = HTTPBearer()
-data_query_builder = DataQueryBuilder()
+questdbclient = QuestDBClient()
 
 # Global variables
 sync_task = None
@@ -175,14 +175,14 @@ async def sync_new_data_batch() -> Dict[str, Any]:
         
         # Query the new data
         if last_timestamp:
-            query = data_query_builder.build_query(
+            query = questdbclient.build_query(
                 last_timestamp=last_timestamp,batch_size=BATCH_SIZE)
             #query = f"""{query}"""
             #print("Generated query for incremental sync:")
             #print(query)
         else:
             # First sync - get all data up to BATCH_SIZE
-            query = data_query_builder.build_query(batch_size=BATCH_SIZE)
+            query = questdbclient.build_query(batch_size=BATCH_SIZE)
         
         logger.info(f"Executing query to get up to {BATCH_SIZE} new records")
         response = requests.get(sync_helpers.QUESTDB_QUERY_URL, 

@@ -1,7 +1,7 @@
-# ingestion/kafka_consumer_to_tsdb.py
+# ingestion/h2_ingestion_pipeline.py
 """
-kafka_consumer_to_tsdb.py - 
-Kafka Consumer with JWT verification and Data Quality Validation
+h2_ingestion_pipeline.py - Kafka Consumer with JWT verification and Data Quality Validation
+
 Simplified pipeline that:
 1. Authenticates messages (JWT check)
 2. Validates data quality (ranges, completeness, etc.)
@@ -9,27 +9,32 @@ Simplified pipeline that:
 """
 
 import json
-from kafka import KafkaConsumer, KafkaAdminClient
+import requests
+import time
+from kafka import KafkaConsumer, KafkaProducer, KafkaAdminClient
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import sys
+import uuid
 import pandas as pd
 import numpy as np
-from ingestion.questdbclient import QuestDBClient
 from ingestion.json_tsdb_manager import Json2TsdbTransformer
+from apps.table_manager import TableManager
 import logging
 
 # ================================
 # Configuration
 # ================================
-questdb_client = QuestDBClient()
-KAFKA_BOOTSTRAP = questdb_client.config['kafka']['bootstrap_servers']
-RAW_TOPIC = questdb_client.config['kafka']['topics']['raw_data']
-QUESTDB_WRITE_URL = questdb_client.QUESTDB_WRITE_URL
+
+KAFKA_BOOTSTRAP = ['localhost:9092']
+RAW_TOPIC = 'raw_h2_data'
+QUESTDB_URL = "http://localhost:9000/write"
 
 BATCH_SIZE = 10
 FLUSH_INTERVAL = 5  # seconds
 WINDOW_SIZE = 50  # records for quality metrics
+
+table_manager = TableManager(QUESTDB_URL)
 logger = logging.getLogger(__name__)
 
 # ======================================
@@ -61,11 +66,6 @@ class SimpleQualityChecker:
             "invalid": 0,
             "quarantined": 0
         }
-        self.required_fields = ['timestamp', 
-                                'sensor_id', 
-                                'measurement_type', 
-                                'value', 
-                                'unit']
     
     def validate_record(self, record: Dict) -> Tuple[bool, List[str]]:
         """
@@ -75,7 +75,8 @@ class SimpleQualityChecker:
         errors = []
         
         # 1. Check required fields
-        for field in self.required_fields:
+        required_fields = ['timestamp', 'sensor_id', 'measurement_type', 'value', 'unit']
+        for field in required_fields:
             if field not in record:
                 errors.append(f"missing_field:{field}")
         
@@ -205,6 +206,52 @@ def is_authenticated(data: Dict) -> Tuple[bool, str]:
     
     return True, "authenticated"
 
+def transform_to_influx_line(data, table_name="raw_h2_data"):
+    """
+    Convert authenticated JSON to InfluxDB line protocol
+    Expected data format:
+    {'timestamp': '2026-03-17T20:26:59.815576Z', 
+        'sensor_id': 'temp_sensor_03', 
+        'measurement_type': 'temperature', 
+        'value': inf, 
+        'unit': '°C', 
+        'auth': {'device_id': 'temp_sensor_03', 
+                'lab': 'MFI', 
+                'device_type': 'temperature', 
+                'authenticated': True, 
+                'auth_method': 'jwt'
+                }, 
+        'qualityflag': None
+    }
+    """
+    try:
+        auth = data['auth']
+        
+        # Parse timestamp
+        if 'timestamp' in data:
+            dt = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+            timestamp_ns = int(dt.timestamp() * 1_000_000_000)
+        else:
+            timestamp_ns = int(time.time() * 1_000_000_000)
+        
+        # Tags (indexed fields)
+        tags = (
+            f"lab={auth.get('lab', 'unknown')},"
+            f"sensor_id={data.get('sensor_id', 'unknown')},"
+            f"measurement_type={data.get('measurement_type', 'unknown')},"
+            f"unit={data.get('unit', 'unknown')},"
+            f"qualityflag={data.get('qualityflag', 'unknown')}"
+        )
+        
+        # Fields (values)
+        fields = f"value={float(data.get('value', 0))}"
+        
+        return f"{table_name},{tags} {fields} {timestamp_ns}"
+    
+    except Exception as e:
+        print(f"   ❌ Transform error: {e}")
+        return None
+
 
 # ============================================================================
 # Kafka Helpers
@@ -234,41 +281,62 @@ def create_consumer():
     except Exception as e:
         logger.error(f"❌ Kafka connection failed: {e}")
         sys.exit(1)
+
+
+# ============================================================================
+# QuestDB Writer
+# ============================================================================
+
+def send_to_questdb(lines: List[str]) -> bool:
+    """
+    Send batch to QuestDB
+    """
+    print(f" 📤 Sending batch to QuestDB: {len(lines)} points")
+    if not lines:
+        return True
+    
+    payload = "\n".join(lines)
+    try:
+        response = requests.post(
+            QUESTDB_URL,
+            data=payload,
+            params={'precision': 'n'},
+            timeout=5
+        )
         
-# ====================
+        if response.status_code in (200, 201, 204):
+            print(f" ✅ Written to QuestDB: {len(lines)} points")
+            return True
+        else:
+            print(f" ❌ QuestDB error: {response.status_code} - {response.text[:100]}")
+            return False
+    
+    except Exception as e:
+        print(f"   ❌ HTTP error: {e}")
+        return False
+
+
+# ============================================================================
 # Main Pipeline
-# ====================
+# ============================================================================
 
 def main():
     print("=" * 70)
     print("🔐 H2 SMART LAB INGESTION PIPELINE (Auth + Quality)")
     print("=" * 70)
     print(f"Raw topic: {RAW_TOPIC}")
-    print(f"QuestDB:  {QUESTDB_WRITE_URL}")
+    print(f"QuestDB:  {QUESTDB_URL}")
     print("=" * 70)
     
     # Initialize components
     consumer = create_consumer()
     #producer = create_producer()
     quality = SimpleQualityChecker()
-
-    """
-    Define schema for QuestDB table 
-    can be extended with more fields/tags as needed
-    """
-    schema = {
-                'tags': ['lab', 
-                        'sensor_id', 
-                        'measurement_type', 
-                        'unit', 
-                        'qualityflag'],     
-                'fields': ['value']
-            }
-    if questdb_client.create_table(RAW_TOPIC, schema):
-        print(f"✅ Table '{RAW_TOPIC}' is ready in QuestDB")
-    json2tsdb = Json2TsdbTransformer(table_name=RAW_TOPIC, 
-                                    tag_keys=schema.get('tags'), 
-                                    field_keys=schema.get('fields'))
+    
+    # Batching
+    questdb_batch = []
+    last_flush = time.time()
+    last_stats = time.time()
     
     print("\n👂 Listening for sensor data...")
     print("   Step 1: Check JWT authentication")
@@ -298,7 +366,6 @@ def main():
             # STEP 2: Validate quality (only if authenticated)
             # ==================================================
             if auth_ok:
-                # Perform quality validation
                 is_valid, errors = quality.validate_record(data)
                 status = "✅ VALID" if is_valid else "⚠️ INVALID"
                 print(f"  📊 Quality: {status} | Errors: {len(errors)}")
@@ -316,13 +383,42 @@ def main():
             
             if not is_valid:
                 data["qualityflag"] = errors
-            line_protocol = json2tsdb.transform(data)
+            line = transform_to_influx_line(data)
+            if line:
+                questdb_batch.append(line)
+                print(f"💾 Queued for QuestDB (batch: {len(questdb_batch)})")
+            
+            # Update statistics (only for authenticated messages that passed auth)
             quality.update_stats(is_valid)
-            # insert into QuestDB
-            questdb_client.insert_data(RAW_TOPIC, line_protocol)
+            # ===========================
+            # BATCH FLUSHING
+            # ===========================
+            current_time = time.time()
+            
+            # Flush to QuestDB if batch is full or interval elapsed
+            should_flush_questdb = (
+                len(questdb_batch) >= BATCH_SIZE or
+                (current_time - last_flush) >= FLUSH_INTERVAL
+            )
+            
+            if should_flush_questdb and questdb_batch:
+                print(f"\n 📤 Flushing {len(questdb_batch)} points to QuestDB...")
+                send_to_questdb(questdb_batch)
+                questdb_batch.clear()
+                last_flush = current_time
+            
+            # Print stats every 30 seconds
+            if current_time - last_stats > 30:
+                quality.print_stats()
+                last_stats = current_time
     
     except KeyboardInterrupt:
         print("\n\n🛑 Stopped by user")
+        
+        # Final flush to QuestDB
+        if questdb_batch:
+            print(f"💾 Flushing final batch ({len(questdb_batch)} points)...")
+            send_to_questdb(questdb_batch)
             
     
     finally:
@@ -335,12 +431,12 @@ def main():
         print("🔍 RECONCILIATION REPORT")
         print("=" * 50)
         print(f"Producer sent:        [?] messages (check producer output)")
-        print(f"Pipeline received:   {quality.stats['total_received']} messages")
-        print(f"Auth failed:         {quality.stats['auth_failed']} messages")
-        print(f"Processed:           {quality.stats['processed']} messages")
-        print(f"Valid:               {quality.stats['valid']} messages")
-        print(f"Invalid:             {quality.stats['invalid']} messages")
-        print(f"Quarantined:         {quality.stats['quarantined']} messages")
+        print(f"Pipeline received:    {quality.stats['total_received']} messages")
+        print(f"Auth failed:          {quality.stats['auth_failed']} messages")
+        print(f"Processed:            {quality.stats['processed']} messages")
+        print(f"Valid:                {quality.stats['valid']} messages")
+        print(f"Invalid:              {quality.stats['invalid']} messages")
+        print(f"Quarantined:          {quality.stats['quarantined']} messages")
         print("-" * 50)
         print(f"Pipeline total = Auth Failed + Processed: {quality.stats['auth_failed'] + quality.stats['processed']}")
         print("=" * 50)
@@ -349,4 +445,51 @@ def main():
 
 
 if __name__ == "__main__":
-    main()   
+    main()
+    
+    
+    
+    
+    
+    
+    
+
+# ============================================================================
+# QuestDB Transformer
+# ============================================================================
+
+# def transform_to_ilp(data: Dict) -> Optional[str]:
+#     """
+#     Transform authenticated JSON to QuestDB Influx Line Protocol format
+#     """
+#     try:
+#         auth = data['auth']
+        
+#         # Parse timestamp to nanoseconds
+#         if 'timestamp' in data:
+#             # Handle ISO format with Z
+#             ts_str = data['timestamp'].replace('Z', '+00:00')
+#             dt = datetime.fromisoformat(ts_str)
+#             timestamp_ns = int(dt.timestamp() * 1_000_000_000)
+#         else:
+#             timestamp_ns = int(time.time() * 1_000_000_000)
+        
+#         # Generate trace ID for tracking
+#         trace_id = str(uuid.uuid4())[:8]  # Short trace ID for readability
+        
+#         # Tags (indexed fields in QuestDB)
+#         tags = (
+#             f"lab={auth.get('lab', 'unknown')},"
+#             f"sensor_id={data.get('sensor_id', 'unknown')},"
+#             f"measurement_type={data.get('measurement_type', 'unknown')},"
+#             f"unit={data.get('unit', 'unknown')}"
+#         )
+        
+#         # Fields (values)
+#         fields = f"value={float(data.get('value', 0))},trace_id=\"{trace_id}\""
+        
+#         return f"hydrogen_data,{tags} {fields} {timestamp_ns}"
+        
+#     except Exception as e:
+#         print(f"   ❌ Transform error: {e}")
+#         return None    

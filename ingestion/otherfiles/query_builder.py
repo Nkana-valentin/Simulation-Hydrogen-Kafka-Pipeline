@@ -2,17 +2,25 @@ from datetime import datetime
 from typing import Optional, List, Union
 import logging
 import sys
+#from apps.table_manager import TableManager
+#import DataQueryBuilder
+
 class DataQueryBuilder:
     """
     Simple query builder for hydrogen data
     """
     
-    def __init__(self, table_name: str = "hydrogen_data"):
+    def __init__(self, 
+                table_name: str):
         self.table_name = table_name
-        self.default_columns = [
-            "timestamp", "lab", "sensor_id", 
-            "measurement_type", "unit", "value"
-        ]
+        self.default_columns = ["timestamp", 
+                                "lab", 
+                                "sensor_id", 
+                                "measurement_type", 
+                                "unit", 
+                                "qualityflag", 
+                                "value"
+                                ]
     
     def _format_columns(self, 
                 columns: Optional[Union[List[str], str]] = None) -> str:
@@ -27,9 +35,9 @@ class DataQueryBuilder:
         return columns  # string case
     
     def build_query(self, 
-        last_timestamp: Optional[str] = None, 
-        batch_size: int = 1000,
-        columns: Optional[Union[List[str], str]] = None) -> str:
+                    last_timestamp: Optional[str] = None, 
+                    batch_size: int = 1000,
+                    columns: Optional[Union[List[str], str]] = None) -> str:
         """
         Build query for hydrogen data
         Args:
@@ -39,11 +47,6 @@ class DataQueryBuilder:
         Returns:
             SQL query string
         """
-        # print("Building query with parameters:")
-        # print(f"  last_timestamp: {last_timestamp}")
-        # print(f"  batch_size: {batch_size}")
-        # print(f"  columns: {columns}")
-        # sys.exit(1)  # Debugging exit to check parameters
         cols = self._format_columns(columns)
         
         if last_timestamp:

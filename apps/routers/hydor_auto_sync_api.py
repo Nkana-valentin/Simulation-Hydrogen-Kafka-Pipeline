@@ -32,8 +32,7 @@ security = HTTPBearer()
 sync_task = None
 
 # Create router
-router = APIRouter(prefix="/auto-sync", 
-                tags=['Auto Sync To Hydor'])
+router = APIRouter(tags=['Auto Sync To Hydor'])
 
 # ========================
 # API Endpoints (Admin only)
