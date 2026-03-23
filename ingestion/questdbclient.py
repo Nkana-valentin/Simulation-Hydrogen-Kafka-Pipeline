@@ -104,7 +104,7 @@ class QuestDBClient:
         """
         try:
             # Check if table already exists
-            if self.table_exists(table_name):
+            if self.check_table_exists(table_name):
                 logger.info(f"📊 Table {table_name} already exists, skipping creation")
                 return True
             
@@ -204,7 +204,7 @@ class QuestDBClient:
             return False
         
         try:
-            if not self.table_exists(table_name):
+            if not self.check_table_exists(table_name):
                 logger.info(f"Table {table_name} does not exist, nothing to drop")
                 return True
             

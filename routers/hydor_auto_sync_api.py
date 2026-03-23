@@ -88,28 +88,28 @@ async def trigger_auto_sync(
     }
 
 
-@router.post("/remote-sync/config")
-async def configure_remote_sync(
-    config_data: Dict[str, Any],
-    admin: Dict = Depends(get_admin_user)
-):
-    """
-    Configure remote sync settings
-    """
+# @router.post("/remote-sync/config")
+# async def configure_remote_sync(
+#     config_data: Dict[str, Any],
+#     admin: Dict = Depends(get_admin_user)
+# ):
+#     """
+#     Configure remote sync settings
+#     """
     
-    if 'remote_sync' not in sync_helpers.config:
-        sync_helpers.config['remote_sync'] = {}
+#     if 'remote_sync' not in sync_helpers.config:
+#         sync_helpers.config['remote_sync'] = {}
     
-    sync_helpers.config['remote_sync'].update(config_data)
+#     sync_helpers.config['remote_sync'].update(config_data)
     
-    # Save to config file
-    with open(sync_helpers.config_path, 'w') as f:
-        yaml.dump(sync_helpers.config, f)
+#     # Save to config file
+#     with open(sync_helpers.config_path, 'w') as f:
+#         yaml.dump(sync_helpers.config, f)
     
-    return {
-        "status": "configured",
-        "remote_sync": sync_helpers.config['remote_sync']
-    }
+#     return {
+#         "status": "configured",
+#         "remote_sync": sync_helpers.config['remote_sync']
+#     }
 
 
 @router.post("/remote-sync/test-ssh")
@@ -253,13 +253,13 @@ async def get_sync_summary(
     return summary
 
 
-# Health check
-@router.get("/health")
-async def health_check(admin: Dict = Depends(get_admin_user)):
-    """Health check endpoint"""
-    return {
-        "app": "auto-sync",
-        "status": "running",
-        "background_worker": "active" if sync_task and not sync_task.done() else "inactive",
-        "timestamp": datetime.now().isoformat()
-    }
+# # Health check
+# @router.get("/health")
+# async def health_check(admin: Dict = Depends(get_admin_user)):
+#     """Health check endpoint"""
+#     return {
+#         "app": "auto-sync",
+#         "status": "running",
+#         "background_worker": "active" if sync_task and not sync_task.done() else "inactive",
+#         "timestamp": datetime.now().isoformat()
+#     }

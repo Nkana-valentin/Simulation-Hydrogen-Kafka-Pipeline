@@ -175,88 +175,88 @@ async def sync_all_batches(
     }
 
 
-@router.get("/sync/researcher/{researcher_id}/progress")
-async def get_researcher_progress(
-    researcher_id: str,
-    current_researcher: Dict = Depends(get_current_researcher)
-):
-    """
-    Get sync progress for a specific researcher
-    Only accessible by the same researcher or admins
-    """
-    if (researcher_id != current_researcher.get("user_id") and 
-        "admin" not in current_researcher.get("roles", [])):
-        raise HTTPException(
-            status_code=403,
-            detail="You can only view your own sync progress"
-        )
+# @router.get("/sync/researcher/{researcher_id}/progress")
+# async def get_researcher_progress(
+#     researcher_id: str,
+#     current_researcher: Dict = Depends(get_current_researcher)
+# ):
+#     """
+#     Get sync progress for a specific researcher
+#     Only accessible by the same researcher or admins
+#     """
+#     if (researcher_id != current_researcher.get("user_id") and 
+#         "admin" not in current_researcher.get("roles", [])):
+#         raise HTTPException(
+#             status_code=403,
+#             detail="You can only view your own sync progress"
+#         )
     
-    state = sync_helpers.get_researcher_sync_state(researcher_id)
+#     state = sync_helpers.get_researcher_sync_state(researcher_id)
     
-    data_access = current_researcher.get("data_access", [])
-    total_available = 0
+#     data_access = current_researcher.get("data_access", [])
+#     total_available = 0
     
-    for dt in data_access:
-        if dt == "all":
-            pass
-        else:
-            count_result = sync_helpers.query_researcher_data_batch(
-                researcher_id, [dt], data_type=dt, batch_size=1
-            )
-            total_available += count_result.get("total_count", 0)
+#     for dt in data_access:
+#         if dt == "all":
+#             pass
+#         else:
+#             count_result = sync_helpers.query_researcher_data_batch(
+#                 researcher_id, [dt], data_type=dt, batch_size=1
+#             )
+#             total_available += count_result.get("total_count", 0)
     
-    return {
-        "researcher_id": researcher_id,
-        "sync_state": state,
-        "progress": {
-            "records_synced": state.get("total_records_synced", 0),
-            "total_available": total_available,
-            "percent_complete": round(
-                (state.get("total_records_synced", 0) / total_available * 100), 2
-            ) if total_available > 0 else 0
-        }
-    }
+#     return {
+#         "researcher_id": researcher_id,
+#         "sync_state": state,
+#         "progress": {
+#             "records_synced": state.get("total_records_synced", 0),
+#             "total_available": total_available,
+#             "percent_complete": round(
+#                 (state.get("total_records_synced", 0) / total_available * 100), 2
+#             ) if total_available > 0 else 0
+#         }
+#     }
 
 
 # ==============================
 # Debug Endpoints (Admin only)
 # ==============================
-@router.get("/debug/token-info")
-async def debug_token_info(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    """
-    Debug endpoint to check token info
-    """
-    token = credentials.credentials
-    result = verify_researcher_token(token)
+# @router.get("/debug/token-info")
+# async def debug_token_info(
+#     credentials: HTTPAuthorizationCredentials = Depends(security)
+# ):
+#     """
+#     Debug endpoint to check token info
+#     """
+#     token = credentials.credentials
+#     result = verify_researcher_token(token)
     
-    if result["valid"]:
-        return {"valid": True, "payload": result["payload"]}
-    else:
-        return {"valid": False, "reason": result.get("reason")}
+#     if result["valid"]:
+#         return {"valid": True, "payload": result["payload"]}
+#     else:
+#         return {"valid": False, "reason": result.get("reason")}
 
 
-@router.get("/debug/researcher-state/{researcher_id}")
-async def debug_researcher_state(
-    researcher_id: str,
-    current_researcher: Dict = Depends(get_current_researcher)
-):
-    """
-    Debug endpoint to view researcher sync state (admin only)
-    """
-    if "admin" not in current_researcher.get("roles", []):
-        raise HTTPException(status_code=403, detail="Admin access required")
+# @router.get("/debug/researcher-state/{researcher_id}")
+# async def debug_researcher_state(
+#     researcher_id: str,
+#     current_researcher: Dict = Depends(get_current_researcher)
+# ):
+#     """
+#     Debug endpoint to view researcher sync state (admin only)
+#     """
+#     if "admin" not in current_researcher.get("roles", []):
+#         raise HTTPException(status_code=403, detail="Admin access required")
     
-    state = sync_helpers.get_researcher_sync_state(researcher_id)
-    state_file = sync_helpers.get_researcher_state_file(researcher_id)
+#     state = sync_helpers.get_researcher_sync_state(researcher_id)
+#     state_file = sync_helpers.get_researcher_state_file(researcher_id)
     
-    return {
-        "researcher_id": researcher_id,
-        "state_file_exists": state_file.exists(),
-        "state_file_path": str(state_file),
-        "sync_state": state
-    }
+#     return {
+#         "researcher_id": researcher_id,
+#         "state_file_exists": state_file.exists(),
+#         "state_file_path": str(state_file),
+#         "sync_state": state
+#     }
 
 
 # # Health check for this app
