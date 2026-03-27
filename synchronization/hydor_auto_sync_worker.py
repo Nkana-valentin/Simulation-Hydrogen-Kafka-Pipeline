@@ -10,6 +10,7 @@ import requests
 import paramiko
 from pathlib import Path
 import glob
+import os
 
 # Import helpers
 from .sync_helpers import SyncHelpers
@@ -225,9 +226,6 @@ async def sync_new_data_batch() -> Dict[str, Any]:
 
 
 async def sync_to_remote() -> Dict[str, Any]:
-    """
-    Sync the latest data to Hydor system
-    """
     remote_sync_enabled = sync_helpers.config.get('remote_sync', {}).get('enabled', False)
     
     if not remote_sync_enabled:
@@ -238,44 +236,60 @@ async def sync_to_remote() -> Dict[str, Any]:
     
     if method == "ssh":
         # Get latest sync directory
-        sync_dirs = sorted(glob.glob("synced_data/sync_*"))
+        all_matches = glob.glob("synced_data/sync_*")
+        sync_dirs = sorted([d for d in all_matches 
+                    if os.path.isdir(d) and not os.path.basename(d) == 'sync_state'])
+        
         if not sync_dirs:
+            logger.error(f"No sync directories found")
             return {"status": "error", "message": "No sync directories found"}
         
         latest_dir = Path(sync_dirs[-1])
         sync_id = latest_dir.name
         
-        # SSH sync logic here
+        logger.info(f"Latest sync directory: {latest_dir}")
+        
+        files_to_transfer = list(latest_dir.glob("*"))
+        logger.info(f"Files to transfer: {len(files_to_transfer)} - {[f.name for f in files_to_transfer]}")
+        
+        if not files_to_transfer:
+            return {"status": "success", "message": "No files to transfer"}
+        
         ssh_config = sync_helpers.config.get('remote_sync', {}).get('ssh', {})
         remote_host = ssh_config.get('host', '')
         remote_user = ssh_config.get('username', '')
         remote_path = ssh_config.get('path', '')
-        password = ssh_config.get('password', '')
+        key_path = ssh_config.get('key_path', '')
         
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
             ssh.connect(
                 hostname=remote_host,
                 username=remote_user,
-                password=password,
+                key_filename=key_path,
                 timeout=30
             )
             
-            # Use SFTP to transfer files
+            # Create remote directory using SSH (recursive)
+            remote_sync_path = f"{remote_path}/{sync_id}"
+            stdin, stdout, stderr = ssh.exec_command(f"mkdir -p {remote_sync_path}")
+            exit_status = stdout.channel.recv_exit_status()
+            
+            if exit_status == 0:
+                logger.info(f"✅ Remote directory created: {remote_sync_path}")
+            else:
+                error = stderr.read().decode()
+                logger.warning(f"mkdir warning: {error}")
+            
+            # Transfer files via SFTP
             sftp = ssh.open_sftp()
             
-            # Create remote directory
-            remote_sync_path = f"{remote_path}/{sync_id}"
-            try:
-                sftp.mkdir(remote_sync_path)
-            except:
-                pass  # Directory might already exist
-            
-            # Transfer all files
             files_transferred = 0
-            for file_path in latest_dir.glob("*"):
+            for file_path in files_to_transfer:
                 remote_file = f"{remote_sync_path}/{file_path.name}"
+                logger.info(f"Transferring {file_path.name} ({file_path.stat().st_size} bytes)...")
                 sftp.put(str(file_path), remote_file)
                 files_transferred += 1
             
@@ -285,7 +299,6 @@ async def sync_to_remote() -> Dict[str, Any]:
             logger.info(f"✅ Remote sync successful: {files_transferred} files transferred")
             return {
                 "status": "success",
-                "method": "ssh",
                 "files_transferred": files_transferred,
                 "remote_path": remote_sync_path
             }
