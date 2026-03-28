@@ -15,7 +15,7 @@ The system streams data from a **Physical Twin (lab sensors)** through Apache Ka
 ---
 
 ## Architecture Overview
-Physical Twin → Kafka (Events) → Quality Layer → TSDB (QuestDB) → API → Digital Twin
+![Architecture Diagram](images/github_internship_image_cropped.jpg)
 
 ---
 
