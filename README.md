@@ -15,7 +15,9 @@ The system streams data from a **Physical Twin (lab sensors)** through Apache Ka
 ---
 
 ## Architecture Overview
-![Architecture Diagram](images/github_internship_image_cropped.jpg)
+<p align="center">
+  <img src="images/github_internship_image_cropped.jpg" width="800"/>
+</p>
 
 ---
 
