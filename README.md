@@ -83,11 +83,11 @@ cd Simulation-Hydrogen-Kafka-Pipeline
 ### 6. Run the Kafka producer (data simulation) 
     ```bash
     python3 kafkaservices/kafka_producer_service.py
-```
+    ```
 
 ### 7. Run the Kafka consumer (ingestion → TSDB)
     ```bash
-        python3 kafkaservices/kafka_consumer_to_tsdb.py
+    python3 kafkaservices/kafka_consumer_to_tsdb.py
     ```   
 
 ---
