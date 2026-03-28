@@ -4,7 +4,7 @@ Authentication Service for Hydrogen Research Pipeline
 JWT Token Issuance and Verification
 """
 from fastapi import FastAPI
-from . import authentication
+from apps.routers import authentication
 
 
 # ========================

@@ -1,26 +1,16 @@
 # TSDB.yml - Configuration for QuestDB, Kafka, and SISSA API
 questdb:
-  host: "localhost"
+  host: "localhost" #127.0.0.1  # Or 127.0.0.1:9000 
   port: 9000
   username: "admin"
   password: "quest"
   database: "qdb"
   
-  tables:
-    hydrogen_data:
-      create_sql: |
-        CREATE TABLE IF NOT EXISTS hydrogen_data (
-          timestamp TIMESTAMP,
-          lab SYMBOL,
-          sensor SYMBOL,
-          measurement_type SYMBOL,
-          value DOUBLE
-        ) TIMESTAMP(timestamp) PARTITION BY DAY;
 
 kafka:
   bootstrap_servers: "localhost:9092"
   topics:
-    raw_data: "h2_lab_raw"
+    raw_data: "raw_h2_data"
     validated_data: "h2_lab_data"
   
     
@@ -31,41 +21,65 @@ security:
   
 
 
+# remote_sync:
+#   enabled: true
+#   method: ssh
+#   ssh:
+#     host: name_or_ip_of_target_machine
+#     username: username
+#     password: "your-password"  # Option 1 (not recommended)
+#     # Your home directory path
+#     #path: "/u/mdmc/$username/synced_data"
+#     #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
+#     #key_path: /home/$username/.ssh/id_rsa
+#     # OR if you have scratch access
+#     path: /scratch/synced_data  
+#   # BATCH CONFIGURATION
+BATCH_SIZE: 50  # Wait until we have 50 records before syncing
+
+
 remote_sync:
   enabled: true
   method: ssh
   ssh:
-    # Use one of these IPs (10.128.2.80 is usually best)
-    host: 195.14.102.215
-    # Alternative: host: 10.128.4.15
-    # Alternative: host: 10.128.6.80
-    username: vnkanang
-    password: "your-password"  # Option 1 (not recommended)
-    # Your home directory path
-    #path: "/u/mdmc/vnkanang/synced_data"
+    host: 192.168.1.23
+    password: "xxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
+    username: username
     #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
-    #key_path: /home/valentinnkana/.ssh/id_rsa
-    # OR if you have scratch access
-    path: /scratch/synced_data  
-  # BATCH CONFIGURATION
-  BATCH_SIZE: 50  # Wait until we have 50 records before syncing
+    key_path: /home/$username/.ssh/id_ed25519  # Your ED25519 key
+    path: "/home/$username/synced_data"
+    allow_agent: false  # Don't use SSH agent
+    look_for_keys: false  # Don't look for SSH keys
+    timeout: 10
 
 
 # remote_sync:
-#   api_endpoint: ''
-#   api_token: ''
 #   enabled: true
 #   method: ssh
 #   ssh:
-#     host: 192.168.1.23
-#     password: "your-password"  # Option 1 (not recommended)
-#     username: valentinnkana
-#     #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
-#     key_path: /home/valentinnkana/.ssh/id_ed25519  # Your ED25519 key
-#     path: "/home/valentinnkana/synced_data"
+#     host: name_or_ip_of_target_machine
+#     #password: "xxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
+#     username: 'root'
+#     key_path: /root/.ssh/id_ed25519  # Your ED25519 keyf
+#     path: "/root/synced_data"
 #     allow_agent: false  # Don't use SSH agent
 #     look_for_keys: false  # Don't look for SSH keys
+#     timeout: 10
     
+
+# remote_sync:
+#   enabled: true
+#   method: ssh
+#   ssh:
+#     host: name_or_ip_of_target_machine
+#     username: username
+#     password: "xxxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
+#     #key_path: /u/v/$username/.ssh/id_ed25519  # Your ED25519 keyf
+#     path: "/scratch/$username/synced_data"
+#     #proxy_jump: "$username@$host"  # Then jump to target
+#     allow_agent: false  # Don't use SSH agent
+#     look_for_keys: false  # Don't look for SSH keys
+#     timeout: 10
 
 sissa:
   api_endpoint: https://sissa-hydor.example.com/api

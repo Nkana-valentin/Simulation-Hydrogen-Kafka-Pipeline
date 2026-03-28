@@ -16,7 +16,6 @@ class QuestDBClient:
                 config_path: str = "TSDB.yml"):
         """
         Initialize QuestDB client with configuration
-        
         Args:
             config_path: Path to YAML configuration file
         """
@@ -28,7 +27,8 @@ class QuestDBClient:
         self.QUESTDB_WRITE_URL = f"http://{self.host}:{self.port}/write"
         self.table_name = self.config['kafka']['topics']['raw_data']
         self.create_table(self.table_name, {
-            'tags': ['lab', 'sensor_id', 
+            'tags': ['lab', 
+                    'sensor_id', 
                     'measurement_type', 
                     'unit', 
                     'qualityflag'],
@@ -133,8 +133,7 @@ class QuestDBClient:
             response = requests.get(
                 self.QUESTDB_QUERY_URL,
                 params={"query": create_query},
-                timeout=10
-            )
+                timeout=10)
             
             if response.status_code == 200:
                 result = response.json()
