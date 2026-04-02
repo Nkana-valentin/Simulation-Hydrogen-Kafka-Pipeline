@@ -1,3 +1,5 @@
+# docker-compose.yml
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -7,6 +9,8 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - app_network
 
   broker:
     image: confluentinc/cp-kafka:7.4.0
@@ -19,33 +23,110 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      # FIX: Use broker:9092 for internal communication
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # These help with connection issues
+      KAFKA_OPTS: "-Djava.net.preferIPv4Stack=true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app_network
 
   questdb:
-    image: questdb/questdb
+    image: questdb/questdb:latest
     container_name: custom_questdb
     restart: always
     ports:
       - "9000:9000"
       - "8812:8812"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
-      - QDB_PG_USER=borat
-      - QDB_PG_PASSWORD=clever_password
+    - QDB_PG_USER=${QUESTDB_USER}
+    - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
     volumes:
       - ./questdb_data:/var/lib/questdb
+    networks:
+      - app_network
 
-  # NEW: Authentication Service
-  # auth-service:
-  #   build: ./auth_service
-  #   container_name: auth-service
-  #   ports:
-  #     - "8001:8001"
-  #   volumes:
-  #     - ./auth_service:/app
-  #   command: uvicorn auth_server:app --host 0.0.0.0 --port 8001 --reload
+
+  kafka_producer:
+    build:
+      context: .
+      dockerfile: kafka_producer/Dockerfile
+    container_name: kafka_producer
+    depends_on:
+      broker:
+        condition: service_healthy
+      fastapi_app:
+        condition: service_started
+    environment:
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      #- KAFKA_BROKER=broker:9092   # ✅ ADD THIS
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
+    env_file:
+      - .env   
+    networks:
+      - app_network
+    restart: on-failure   
+
+  kafka_consumer:
+    build:
+      context: .
+      dockerfile: kafka_consumer/Dockerfile
+    container_name: kafka_consumer
+    depends_on:
+      broker:
+        condition: service_healthy
+      questdb:
+        condition: service_started
+    environment:
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      #- KAFKA_BROKER=broker:9092   # ✅ ADD THIS
+      - KAFKA_TOPIC=${KAFKA_TOPIC_RAW}  # Use environment variable for topic
+      - QUESTDB_HOST=${QUESTDB_HOST}
+      - QUESTDB_PORT=${QUESTDB_PORT}
+    env_file:
+      - .env  
+    volumes:
+      - ./TSDB.yml:/app/TSDB.yml
+      - ./ingestion:/app/ingestion
+    networks:
+      - app_network
+    restart: on-failure  
+
+  fastapi_app:
+    build: .
+    container_name: fastapi_app
+    ports:
+      - "${FASTAPI_PORT}:8000"
+    environment:
+      - QUESTDB_HOST=${QUESTDB_HOST}
+      - QUESTDB_PORT=${QUESTDB_PORT}
+      - KAFKA_BROKER=${KAFKA_BROKER}
+      - REMOTE_SYNC_ENABLED=${REMOTE_SYNC_ENABLED}
+      - SSH_HOST=${SSH_HOST}
+      - SSH_USER=${SSH_USER}
+      - SSH_REMOTE_PATH=${SSH_REMOTE_PATH}
+      - SSH_KEY_PATH=${SSH_KEY_PATH}  # ← Add this to pass the path to container
+      #- SSH_KEY_PATH=/app/ssh_key
+    env_file:
+      - .env
+    networks:
+        - app_network
+    restart: on-failure
+    volumes:
+      - ./synced_data:/app/synced_data
+      - ~/.ssh:/app/.ssh:ro
+      #- /u/v/vnkanang/.ssh:/app/.ssh:ro
+      #- /u/v/vnkanang/.ssh/id_ed25519:/app/ssh_key:ro
+
+networks:
+    app_network:
+      driver: bridge
