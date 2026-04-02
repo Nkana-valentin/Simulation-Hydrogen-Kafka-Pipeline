@@ -1,50 +1,38 @@
-# TSDB.yml - Configuration for QuestDB, Kafka, and SISSA API
 questdb:
-  host: "localhost"
-  port: 9000
-  username: "admin"
-  password: "quest"
-  database: "qdb"
-  
-  tables:
-    hydrogen_data:
-      create_sql: |
-        CREATE TABLE IF NOT EXISTS hydrogen_data (
-          timestamp TIMESTAMP,
-          lab SYMBOL,
-          sensor SYMBOL,
-          measurement_type SYMBOL,
-          value DOUBLE
-        ) TIMESTAMP(timestamp) PARTITION BY DAY;
+  host: ${QUESTDB_HOST}
+  port: ${QUESTDB_PORT}
+  username: ${QUESTDB_USER}
+  password: ${QUESTDB_PASSWORD}
+  database: ${QUESTDB_DATABASE}
 
 kafka:
-  bootstrap_servers: "localhost:9092"
+  bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}
   topics:
-    raw_data: "h2_lab_raw"
-    validated_data: "h2_lab_data"
-  
-sissa:
-  api_endpoint: "https://sissa-hydor.example.com/api"
-  sync_interval: "30s"  # Sync every 30 seconds
-  auth_token: "${SISSA_API_TOKEN}"
-  #api_base_url: ${SISSA_API_URL:https://api.sissa-hydor.it/v1}
-  allowed_ips:
-    - 193.xxx.0.0/16
-    - 2001:xxx::/32
-    
+    raw_data: ${KAFKA_TOPIC_RAW}
+    validated_data: ${KAFKA_TOPIC_VALIDATED}
+
 security:
   api_keys:
     sissa_hydor_01: ${SISSA_API_KEY_1}
-    sissa_hydor_02: ${SISSA_API_KEY_2}    
+    sissa_hydor_02: ${SISSA_API_KEY_2}
+
+BATCH_SIZE: ${BATCH_SIZE}
 
 remote_sync:
-  enabled: false  # Set to true to enable
-  method: "api"   # "api", "ssh", or "both"
-  api_endpoint: "http://other-computer:8000/api/data"
-  api_token: "your-token-here"
+  enabled: true
+  method: ssh
   ssh:
-    host: "other-computer.local"
-    username: "your-username"
-    password: "your-password"  # Optional, use key if possible
-    key_path: "/path/to/ssh/key"
-    path: "/home/username/synced_data"    
+    host: ${SSH_HOST}
+    username: ${SSH_USER}
+    password: ${SSH_PASSWORD}
+    key_path: ${SSH_KEY_PATH}
+    path: ${SSH_REMOTE_PATH}
+    allow_agent: false
+    look_for_keys: false
+    timeout: 10
+
+sissa:
+  api_endpoint: https://sissa-hydor.example.com/api
+  auth_token: ${SISSA_API_TOKEN}
+  auto_sync: true
+  sync_interval: ${SYNC_INTERVAL}

@@ -16,32 +16,14 @@ RESEARCHER_MAP: dict = {
     (r["institution"], r["username"]): r
     for r in registry.REGISTRY["researchers"]
 }
-
-# router = APIRouter(
-#     prefix="/auth",
-#     tags=['Authentication']
-# )
-
+# Create router
 router = APIRouter(tags=['Authentication'])
-
-@router.get("/health")
-def health():
-    """
-    Health check
-    """
-    return {
-        "status": "healthy",
-        "service": "Authentication Service",
-        "timestamp": datetime.now().isoformat(),
-        "devices_registered": len(registry.REGISTRY["devices"]),
-        "researchers_registered": len(registry.REGISTRY["researchers"])
-    }
 
 
 @router.post("/device/login", 
             response_model=schemas.TokenResponse, 
             status_code=status.HTTP_201_CREATED)
-def device_login(login: schemas.DeviceLogin):
+async def device_login(login: schemas.DeviceLogin):
     """
     Authenticate a lab device (sensor, analyzer, etc.)
     """
@@ -114,3 +96,17 @@ def verify_token_endpoint(request: schemas.TokenVerifyRequest):
     Verify a token (for other services)
     """
     return auth_token.verify_token(request.token)
+
+
+@router.get("/health")
+def health():
+    """
+    Health check
+    """
+    return {
+        "status": "healthy",
+        "service": "Authentication Service",
+        "timestamp": datetime.now().isoformat(),
+        "devices_registered": len(registry.REGISTRY["devices"]),
+        "researchers_registered": len(registry.REGISTRY["researchers"])
+    }

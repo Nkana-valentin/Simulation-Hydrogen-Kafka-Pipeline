@@ -7,7 +7,9 @@ from typing import Dict, Any, Optional
 # ========================
 
 class DeviceLogin(BaseModel):
-    """Credentials for device authentication."""
+    """
+    Credentials for device authentication.
+    """
     device_id: str = Field(
         ...,
         description="Unique device identifier (e.g. sensor-lab1-001)",
@@ -21,14 +23,18 @@ class DeviceLogin(BaseModel):
 
 
 class ResearcherLogin(BaseModel):
-    """Credentials for researcher authentication."""
+    """
+    Credentials for researcher authentication.
+    """
     username: str = Field(..., description="Researcher username", example="jane_doe")
     password: str = Field(..., description="Researcher password", example="MyPassw0rd!")
     institution: str = Field(..., description="Institution / lab name", example="ETH Zurich")
 
 
 class TokenResponse(BaseModel):
-    """JWT token response returned after successful login."""
+    """
+    JWT token response returned after successful login.
+    """
     access_token: str = Field(
         ...,
         description="The signed JWT access token",
@@ -54,7 +60,9 @@ class TokenResponse(BaseModel):
 
 
 class TokenVerifyRequest(BaseModel):
-    """Request body to verify a token."""
+    """
+    Request body to verify a token.
+    """
     token: str = Field(
         ...,
         description="JWT token to validate",
@@ -63,7 +71,9 @@ class TokenVerifyRequest(BaseModel):
 
 
 class TokenVerifyResponse(BaseModel):
-    """Result of token verification (used by other microservices)."""
+    """
+    Result of token verification (used by other microservices).
+    """
     valid: bool = Field(..., description="True if the token is valid")
     payload: Optional[Dict[str, Any]] = Field(
         None,
