@@ -1,8 +1,10 @@
+# ingestion/questdbclient.py
 import requests
 import logging
 from typing import Dict, Optional, List, Union
 from datetime import datetime
 import yaml
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -18,22 +20,23 @@ class QuestDBClient:
         Initialize QuestDB client with configuration
         Args:
             config_path: Path to YAML configuration file
+            table_name: Name of the table to use
         """
         self.config_path = config_path
         self.config = self._load_config()
-        self.host = self.config['questdb']['host']
-        self.port = self.config['questdb']['port']
+        self.host = os.getenv("QUESTDB_HOST")
+        self.port = int(os.getenv("QUESTDB_PORT" ))
         self.QUESTDB_QUERY_URL = f"http://{self.host}:{self.port}/exec"
         self.QUESTDB_WRITE_URL = f"http://{self.host}:{self.port}/write"
-        self.table_name = self.config['kafka']['topics']['raw_data']
-        self.create_table(self.table_name, {
+        self.table_name = os.getenv("KAFKA_TOPIC_RAW")
+        self.schema = {
             'tags': ['lab', 
                     'sensor_id', 
                     'measurement_type', 
                     'unit', 
                     'qualityflag'],
             'fields': ['value']
-        })
+        }
         
         # Default columns for queries
         self.default_columns = [
@@ -47,6 +50,7 @@ class QuestDBClient:
         ]
         
         logger.info(f"🔌 Connected to QuestDB at {self.host}:{self.port}")
+        #logger.info(f"🔌 Attempting connection to QuestDB at {self.host}:{self.port}")
     
     def _load_config(self) -> Dict:
         """
