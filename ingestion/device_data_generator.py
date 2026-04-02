@@ -11,7 +11,7 @@ import requests
 import sys
 import math
 from fastapi import status
-
+import os
 
 # Device credentials (from device_registry.json)
 DEVICES = [
@@ -21,7 +21,8 @@ DEVICES = [
     {"id": "voltage_sensor_04", "secret": "volt012", "lab": "MFI", "type": "voltage", "unit": "V"}
 ]
 
-AUTH_URL = "http://localhost:8000"
+#AUTH_URL = "http://localhost:8000" # fix this container name and port for auth service in docker-compose.yml
+AUTH_URL = os.getenv("AUTH_SERVICE_URL", "http://fastapi_app:8000")
 
 # Configuration for data quality issues
 QUALITY_ISSUE_PROBABILITY = 0.195  # 19.5% chance of some quality issue

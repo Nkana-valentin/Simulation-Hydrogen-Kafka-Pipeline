@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.git
+synced_data/
+questdb_data/
+
+test_access_control.sh
+test_sync_auth.sh
+how_to_run.txt

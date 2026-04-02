@@ -1,4 +1,4 @@
-# sync_helpers.py
+# synchronization/sync_helpers.py
 import logging
 import json
 import yaml
@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List, Union
 import math
 from ingestion.questdbclient import QuestDBClient
+import os
 
 # Setup logging
 logging.basicConfig(
@@ -33,14 +34,17 @@ class SyncHelpers:
             config_path: Path to YAML configuration file
         """
         self.config_path = config_path
-        self.config = self._load_config()
+        #self.config = self._load_config()
+        self.config = self._load_env_config()
+        self.validate_config()
         # QuestDB configuration
-        self.QUESTDB_QUERY_URL = f"http://{self.config['questdb']['host']}:{self.config['questdb']['port']}/exec"
         self.questdb_client = QuestDBClient()
-        
+        self.QUESTDB_QUERY_URL = f"http://{self.questdb_client.host}:{self.questdb_client.port}/exec"
+
+
         # Directory structure
         self.BASE_DIR = Path(__file__).resolve().parent.parent
-        self.SYNC_DATA_DIR = self.BASE_DIR / "synced_data"
+        self.SYNC_DATA_DIR = Path(os.getenv("LOCAL_SYNC_DIR", "./synced_data"))
         self.SYNC_STATE_DIR = self.SYNC_DATA_DIR / "sync_state"
         self.SYNC_STATE_FILE = self.SYNC_DATA_DIR / "last_sync.txt"
         
@@ -50,16 +54,38 @@ class SyncHelpers:
         logger.info(f"✅ Sync directories ready → {self.SYNC_DATA_DIR.resolve()}")
         logger.info(f"   State files → {self.SYNC_STATE_DIR.resolve()}")
     
-    def _load_config(self) -> Dict:
-        """
-        Load configuration from YAML file
-        """
-        try:
-            with open(self.config_path) as f:
-                return yaml.safe_load(f)
-        except Exception as e:
-            logger.error(f"Failed to load config: {e}")
-            return {"questdb": {"host": "localhost", "port": 9000}}
+    def _load_env_config(self) -> Dict[str, Any]:
+        return {
+            "questdb": {
+                "host": os.getenv("QUESTDB_HOST", "localhost"),
+                "port": int(os.getenv("QUESTDB_PORT", 9000)),
+                "user": os.getenv("QUESTDB_USER", "admin"),
+                "password": os.getenv("QUESTDB_PASSWORD", "quest"),
+                "database": os.getenv("QUESTDB_DATABASE", "qdb"),
+            },
+            "kafka": {
+                "bootstrap_servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
+                "topic_raw": os.getenv("KAFKA_TOPIC_RAW"),
+                "topic_validated": os.getenv("KAFKA_TOPIC_VALIDATED"),
+            },
+            "ssh": {
+                "host": os.getenv("SSH_HOST"),
+                "user": os.getenv("SSH_USER"),
+                "key_path": os.getenv("SSH_KEY_PATH"),
+                "remote_path": os.getenv("SSH_REMOTE_PATH"),
+            },
+            "pipeline": {
+                "batch_size": int(os.getenv("BATCH_SIZE", 50)),
+                "sync_interval": os.getenv("SYNC_INTERVAL", "30s"),
+            }
+        }
+        
+    def validate_config(self):
+        required = ["QUESTDB_HOST", "KAFKA_BOOTSTRAP_SERVERS", "SSH_HOST"]
+
+        for var in required:
+            if not os.getenv(var):
+                raise ValueError(f"❌ Missing required env variable: {var}")    
     
     def _ensure_directories(self):
         """
@@ -658,7 +684,7 @@ class SyncHelpers:
         
         return response
     
-    def check_for_new_data(self, table_name: str="raw_h2_data") -> Dict[str, Any]:
+    def check_for_new_data(self, table_name: str) -> Dict[str, Any]:
         """
         Check if there's new data since last sync
         Returns info about new data including count

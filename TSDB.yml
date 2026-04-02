@@ -1,88 +1,38 @@
-# TSDB.yml - Configuration for QuestDB, Kafka, and SISSA API
 questdb:
-  host: "localhost" #127.0.0.1  # Or 127.0.0.1:9000 
-  port: 9000
-  username: "admin"
-  password: "quest"
-  database: "qdb"
-  
+  host: ${QUESTDB_HOST}
+  port: ${QUESTDB_PORT}
+  username: ${QUESTDB_USER}
+  password: ${QUESTDB_PASSWORD}
+  database: ${QUESTDB_DATABASE}
 
 kafka:
-  bootstrap_servers: "localhost:9092"
+  bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}
   topics:
-    raw_data: "raw_h2_data"
-    validated_data: "h2_lab_data"
-  
-    
+    raw_data: ${KAFKA_TOPIC_RAW}
+    validated_data: ${KAFKA_TOPIC_VALIDATED}
+
 security:
   api_keys:
     sissa_hydor_01: ${SISSA_API_KEY_1}
-    sissa_hydor_02: ${SISSA_API_KEY_2}    
-  
+    sissa_hydor_02: ${SISSA_API_KEY_2}
 
-
-# remote_sync:
-#   enabled: true
-#   method: ssh
-#   ssh:
-#     host: name_or_ip_of_target_machine
-#     username: username
-#     password: "your-password"  # Option 1 (not recommended)
-#     # Your home directory path
-#     #path: "/u/mdmc/$username/synced_data"
-#     #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
-#     #key_path: /home/$username/.ssh/id_rsa
-#     # OR if you have scratch access
-#     path: /scratch/synced_data  
-#   # BATCH CONFIGURATION
-BATCH_SIZE: 50  # Wait until we have 50 records before syncing
-
+BATCH_SIZE: ${BATCH_SIZE}
 
 remote_sync:
   enabled: true
   method: ssh
   ssh:
-    host: 192.168.1.23
-    password: "xxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
-    username: username
-    #key_path: "~/.ssh/id_rsa"  # Option 2 (recommended)
-    key_path: /home/$username/.ssh/id_ed25519  # Your ED25519 key
-    path: "/home/$username/synced_data"
-    allow_agent: false  # Don't use SSH agent
-    look_for_keys: false  # Don't look for SSH keys
+    host: ${SSH_HOST}
+    username: ${SSH_USER}
+    password: ${SSH_PASSWORD}
+    key_path: ${SSH_KEY_PATH}
+    path: ${SSH_REMOTE_PATH}
+    allow_agent: false
+    look_for_keys: false
     timeout: 10
-
-
-# remote_sync:
-#   enabled: true
-#   method: ssh
-#   ssh:
-#     host: name_or_ip_of_target_machine
-#     #password: "xxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
-#     username: 'root'
-#     key_path: /root/.ssh/id_ed25519  # Your ED25519 keyf
-#     path: "/root/synced_data"
-#     allow_agent: false  # Don't use SSH agent
-#     look_for_keys: false  # Don't look for SSH keys
-#     timeout: 10
-    
-
-# remote_sync:
-#   enabled: true
-#   method: ssh
-#   ssh:
-#     host: name_or_ip_of_target_machine
-#     username: username
-#     password: "xxxxxxxxxxxxxxxxx"  # Option 1 (not recommended)
-#     #key_path: /u/v/$username/.ssh/id_ed25519  # Your ED25519 keyf
-#     path: "/scratch/$username/synced_data"
-#     #proxy_jump: "$username@$host"  # Then jump to target
-#     allow_agent: false  # Don't use SSH agent
-#     look_for_keys: false  # Don't look for SSH keys
-#     timeout: 10
 
 sissa:
   api_endpoint: https://sissa-hydor.example.com/api
   auth_token: ${SISSA_API_TOKEN}
   auto_sync: true
-  sync_interval: 30s
+  sync_interval: ${SYNC_INTERVAL}
