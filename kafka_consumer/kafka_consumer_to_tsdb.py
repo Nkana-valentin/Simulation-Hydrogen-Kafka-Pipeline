@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ================================
 KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'broker:9092')
-RAW_TOPIC  = os.getenv("KAFKA_TOPIC_RAW") #os.getenv('KAFKA_TOPIC', 'raw_h2_data')
+RAW_TOPIC  = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
 
 
 print("=" * 70)
@@ -40,6 +40,14 @@ questdb_client = QuestDBClient()
 QUESTDB_WRITE_URL = questdb_client.QUESTDB_WRITE_URL
 print(f"QuestDB:  {QUESTDB_WRITE_URL}")
 print("=" * 70)
+
+
+def validate_settings():
+    """Validate runtime settings before starting the pipeline."""
+    if not KAFKA_BROKER:
+        raise ValueError("KAFKA_BROKER is empty")
+    if not RAW_TOPIC:
+        raise ValueError("KAFKA_TOPIC_RAW is empty")
 
 # =============================================================
 # Simple Data Quality Checker: 
@@ -78,7 +86,7 @@ class SimpleQualityChecker:
         
         try:
             ts_str = record['timestamp'].replace('Z', '+00:00')
-            dt = datetime.fromisoformat(ts_str)
+            datetime.fromisoformat(ts_str)
         except Exception as e:
             errors.append(f"invalid_timestamp:{str(e)}")
         
@@ -96,7 +104,7 @@ class SimpleQualityChecker:
         
         return len(errors) == 0, errors
     
-    def update_stats(self, is_valid: bool, auth_success: bool = True):
+    def update_stats(self, is_valid: bool):
         self.stats["processed"] += 1
         if is_valid:
             self.stats["valid"] += 1
@@ -118,6 +126,9 @@ class SimpleQualityChecker:
 # ============================================================================
 
 def is_authenticated(data: Dict) -> Tuple[bool, str]:
+    if not isinstance(data, dict):
+        return False, "invalid_payload_type"
+
     if 'auth' not in data:
         return False, "missing_auth_section"
     
@@ -162,7 +173,7 @@ def create_consumer():
             )
             
             # Get partition info to verify connection
-            partitions = consumer.partitions_for_topic(RAW_TOPIC)
+            partitions = consumer.partitions_for_topic(RAW_TOPIC) or set()
             logger.info(f"✅ Connected to Kafka, topic '{RAW_TOPIC}' has {len(partitions)} partitions")
             return consumer
             
@@ -180,6 +191,8 @@ def create_consumer():
 # ====================
 
 def main():
+    validate_settings()
+
     # Wait for Kafka to be ready
     logger.info("Waiting 15 seconds for Kafka to be ready...")
     time.sleep(15)
@@ -258,7 +271,7 @@ def main():
                     try:
                         line_protocol = json2tsdb.transform(data)
                         if questdb_client.insert_data(RAW_TOPIC, line_protocol):
-                            quality.update_stats(is_valid, auth_ok)
+                            quality.update_stats(is_valid)
                         else:
                             logger.error(f"Failed to insert data into QuestDB")
                     except Exception as e:
