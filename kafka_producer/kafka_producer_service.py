@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Get Kafka broker from environment variable
 KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'broker:9092')  # Default to broker:9092
-RAW_TOPIC = os.getenv("KAFKA_TOPIC_RAW")  # os.getenv('KAFKA_TOPIC', 'raw_h2_data')
+RAW_TOPIC = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
 
 # Print configuration at startup
 print(f"Configuration:")
@@ -30,10 +30,22 @@ print(f"  KAFKA_BROKER env: {os.getenv('KAFKA_BROKER', 'NOT SET')}")
 print(f"  Using broker: {KAFKA_BROKER}")
 print(f"  Topic: {RAW_TOPIC}")
 
+
+def validate_settings():
+    """
+    Validate runtime configuration and fail fast with actionable errors.
+    """
+    if not KAFKA_BROKER:
+        raise ValueError("KAFKA_BROKER is empty")
+    if not RAW_TOPIC:
+        raise ValueError("KAFKA_TOPIC_RAW is empty")
+
+
 def create_topic_if_not_exists():
     """
     Create topic if it doesn't exist
     """
+    admin_client = None
     try:
         admin_client = KafkaAdminClient(
             bootstrap_servers=[KAFKA_BROKER],
@@ -55,12 +67,14 @@ def create_topic_if_not_exists():
         else:
             logger.info(f"✅ Topic '{RAW_TOPIC}' already exists")
             
-        admin_client.close()
         return True
         
     except Exception as e:
         logger.warning(f"Could not create topic: {e}")
         return False
+    finally:
+        if admin_client:
+            admin_client.close()
 
 def create_producer(max_retries=15, retry_delay=3):
     """
@@ -100,6 +114,8 @@ def create_producer(max_retries=15, retry_delay=3):
                 raise
 
 def main():
+    validate_settings()
+
     # Wait for Kafka to be ready
     logger.info("Waiting 5 seconds for services to initialize...")
     time.sleep(5)
@@ -140,10 +156,13 @@ def main():
     except KeyboardInterrupt:
         print("\n\n🛑 Stopped by user")
         if 'producer' in locals():
+            producer.flush(timeout=10)
             producer.close()
         print(f"📊 Total messages sent: {message_count}")
     except Exception as e:
         logger.error(f"Producer failed: {e}")
+        if 'producer' in locals():
+            producer.close()
         raise
 
 if __name__ == "__main__":
