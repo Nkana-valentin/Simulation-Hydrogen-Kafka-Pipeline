@@ -1,119 +1,84 @@
-# kafka_consumer/kafka_consumer_to_tsdb.py
-
-"""
-kafka_consumer_to_tsdb.py - 
-Kafka Consumer with JWT verification and Data Quality Validation
-"""
+"""Kafka consumer pipeline with authentication and quality checks."""
 
 import json
-import os
-import time
 import logging
-from kafka import KafkaConsumer
-from datetime import datetime
-from typing import Dict, List, Tuple
+import os
 import sys
-from ingestion.questdbclient import QuestDBClient
-from ingestion.json_tsdb_manager import Json2TsdbTransformer
+import time
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
-# Setup logging
+from kafka import KafkaConsumer
+
+from ingestion.json_tsdb_manager import Json2TsdbTransformer
+from ingestion.questdbclient import QuestDBClient
+
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ================================
-# Configuration
-# ================================
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'broker:9092')
-RAW_TOPIC  = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
-
-
-print("=" * 70)
-print("🔐 H2 SMART LAB INGESTION PIPELINE (Auth + Quality)")
-print("=" * 70)
-print(f"Kafka Broker: {KAFKA_BROKER}")
-print(f"Raw topic: {RAW_TOPIC}")
-
-questdb_client = QuestDBClient()
-QUESTDB_WRITE_URL = questdb_client.QUESTDB_WRITE_URL
-print(f"QuestDB:  {QUESTDB_WRITE_URL}")
-print("=" * 70)
-
-
-def validate_settings():
-    """Validate runtime settings before starting the pipeline."""
-    if not KAFKA_BROKER:
-        raise ValueError("KAFKA_BROKER is empty")
-    if not RAW_TOPIC:
-        raise ValueError("KAFKA_TOPIC_RAW is empty")
-
-# =============================================================
-# Simple Data Quality Checker: 
-# will be replaced by ingestion/quality_check.py in the future
-# =============================================================
 
 class SimpleQualityChecker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.rules = {
             "temperature": {"min": -50, "max": 500},
             "pressure": {"min": 0, "max": 1000},
             "flow": {"min": 0, "max": 100},
             "voltage": {"min": 0, "max": 1000},
             "current": {"min": 0, "max": 100},
-            "efficiency": {"min": 0, "max": 100}
+            "efficiency": {"min": 0, "max": 100},
         }
-        
         self.stats = {
             "total_received": 0,
             "auth_failed": 0,
             "processed": 0,
             "valid": 0,
-            "invalid": 0
+            "invalid": 0,
         }
-        self.required_fields = ['timestamp', 'sensor_id', 'measurement_type', 'value', 'unit']
-    
+        self.required_fields = ["timestamp", "sensor_id", "measurement_type", "value", "unit"]
+
     def validate_record(self, record: Dict) -> Tuple[bool, List[str]]:
-        errors = []
-        
+        errors: List[str] = []
+
         for field in self.required_fields:
             if field not in record:
                 errors.append(f"missing_field:{field}")
-        
+
         if errors:
             return False, errors
-        
+
         try:
-            ts_str = record['timestamp'].replace('Z', '+00:00')
-            datetime.fromisoformat(ts_str)
-        except Exception as e:
-            errors.append(f"invalid_timestamp:{str(e)}")
-        
+            datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
+        except Exception as exc:
+            errors.append(f"invalid_timestamp:{str(exc)}")
+
         try:
-            value = float(record['value'])
-            measurement_type = record.get('measurement_type', '').lower()
+            value = float(record["value"])
+            measurement_type = str(record.get("measurement_type", "")).lower()
             if measurement_type in self.rules:
                 rule = self.rules[measurement_type]
-                if value < rule['min']:
+                if value < rule["min"]:
                     errors.append(f"value_below_min:{value}<{rule['min']}")
-                if value > rule['max']:
+                if value > rule["max"]:
                     errors.append(f"value_above_max:{value}>{rule['max']}")
         except (ValueError, TypeError):
             errors.append(f"value_not_numeric:{record.get('value')}")
-        
+
         return len(errors) == 0, errors
-    
-    def update_stats(self, is_valid: bool):
+
+    def update_stats(self, is_valid: bool) -> None:
         self.stats["processed"] += 1
         if is_valid:
             self.stats["valid"] += 1
         else:
             self.stats["invalid"] += 1
-    
-    def print_stats(self):
+
+    def print_stats(self) -> None:
         print("\n" + "-" * 50)
-        print(f"📊 QUALITY STATS:")
+        print("📊 QUALITY STATS:")
         print(f"   📥 Total Received: {self.stats['total_received']}")
         print(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
         print(f"   ⚙️  Processed: {self.stats['processed']}")
@@ -121,170 +86,181 @@ class SimpleQualityChecker:
         print(f"   └─ ❌ Invalid: {self.stats['invalid']}")
         print("-" * 50)
 
-# ============================================================================
-# Authentication Checker
-# ============================================================================
 
-def is_authenticated(data: Dict) -> Tuple[bool, str]:
-    if not isinstance(data, dict):
-        return False, "invalid_payload_type"
+class KafkaToTsdbConsumerService:
+    """Encapsulated ingestion pipeline from Kafka to QuestDB."""
 
-    if 'auth' not in data:
-        return False, "missing_auth_section"
-    
-    auth = data['auth']
-    if not auth.get('authenticated', False):
-        return False, "not_authenticated_flag"
-    if 'device_id' not in auth:
-        return False, "missing_device_id"
-    if 'lab' not in auth:
-        return False, "missing_lab"
-    
-    return True, "authenticated"
+    def __init__(self) -> None:
+        self.kafka_broker = os.getenv("KAFKA_BROKER", "broker:9092")
+        self.raw_topic = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
+        self.questdb_client = QuestDBClient()
+        self.quality = SimpleQualityChecker()
+        self.schema = {
+            "tags": ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"],
+            "fields": ["value"],
+        }
+        self.json2tsdb = Json2TsdbTransformer(
+            table_name=self.raw_topic,
+            tag_keys=self.schema.get("tags"),
+            field_keys=self.schema.get("fields"),
+        )
+        self.consumer: Optional[KafkaConsumer] = None
+        self.message_count = 0
 
-# ============================================================================
-# Kafka Helpers
-# ============================================================================
+    def print_banner(self) -> None:
+        print("=" * 70)
+        print("🔐 H2 SMART LAB INGESTION PIPELINE (Auth + Quality)")
+        print("=" * 70)
+        print(f"Kafka Broker: {self.kafka_broker}")
+        print(f"Raw topic: {self.raw_topic}")
+        print(f"QuestDB:  {self.questdb_client.QUESTDB_WRITE_URL}")
+        print("=" * 70)
 
-def create_consumer():
-    """Create Kafka consumer with retry logic"""
-    max_retries = 30
-    retry_delay = 5
-    
-    for attempt in range(max_retries):
+    def validate_settings(self) -> None:
+        if not self.kafka_broker:
+            raise ValueError("KAFKA_BROKER is empty")
+        if not self.raw_topic:
+            raise ValueError("KAFKA_TOPIC_RAW is empty")
+
+    @staticmethod
+    def is_authenticated(data: Dict) -> Tuple[bool, str]:
+        if not isinstance(data, dict):
+            return False, "invalid_payload_type"
+        if "auth" not in data:
+            return False, "missing_auth_section"
+
+        auth = data["auth"]
+        if not auth.get("authenticated", False):
+            return False, "not_authenticated_flag"
+        if "device_id" not in auth:
+            return False, "missing_device_id"
+        if "lab" not in auth:
+            return False, "missing_lab"
+        return True, "authenticated"
+
+    def create_consumer(self) -> KafkaConsumer:
+        max_retries = 30
+        retry_delay = 5
+
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    "Attempting to connect to Kafka at %s (attempt %d/%d)",
+                    self.kafka_broker,
+                    attempt + 1,
+                    max_retries,
+                )
+
+                consumer = KafkaConsumer(
+                    self.raw_topic,
+                    bootstrap_servers=[self.kafka_broker],
+                    value_deserializer=lambda payload: json.loads(payload.decode("utf-8")),
+                    auto_offset_reset="earliest",
+                    group_id="questdb_consumer",
+                    enable_auto_commit=True,
+                    consumer_timeout_ms=1000,
+                    max_poll_records=100,
+                    request_timeout_ms=40000,
+                    session_timeout_ms=30000,
+                    heartbeat_interval_ms=10000,
+                    api_version_auto_timeout_ms=30000,
+                )
+
+                partitions = consumer.partitions_for_topic(self.raw_topic) or set()
+                logger.info(
+                    "✅ Connected to Kafka, topic '%s' has %d partitions",
+                    self.raw_topic,
+                    len(partitions),
+                )
+                self.consumer = consumer
+                return consumer
+            except Exception as exc:
+                logger.warning("⚠️ Failed to connect to Kafka: %s", exc)
+                if attempt < max_retries - 1:
+                    logger.info("Waiting %d seconds...", retry_delay)
+                    time.sleep(retry_delay)
+                else:
+                    logger.error("❌ Failed to connect to Kafka after all retries")
+                    raise
+
+    def setup_tsdb(self) -> None:
+        if self.questdb_client.create_table(self.raw_topic, self.schema):
+            logger.info("✅ Table '%s' is ready in QuestDB", self.raw_topic)
+
+    def process_record(self, data: Dict) -> None:
+        auth_ok, auth_reason = self.is_authenticated(data)
+
+        if auth_ok:
+            is_valid, errors = self.quality.validate_record(data)
+        else:
+            is_valid = False
+            errors = [f"auth_failed:{auth_reason}"]
+            self.quality.stats["auth_failed"] += 1
+
+        data["qualityflag"] = str(is_valid)
+        if not is_valid and errors:
+            data["qualityflag"] = ",".join(errors[:3])
+
         try:
-            logger.info(f"Attempting to connect to Kafka at {KAFKA_BROKER} (attempt {attempt + 1}/{max_retries})")
-            
-            # Create consumer with correct timeout settings
-            consumer = KafkaConsumer(
-                RAW_TOPIC,
-                bootstrap_servers=[KAFKA_BROKER],
-                value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-                auto_offset_reset='earliest',
-                group_id='questdb_consumer',
-                enable_auto_commit=True,
-                consumer_timeout_ms=1000,
-                max_poll_records=100,
-                # FIX: request_timeout_ms must be > session_timeout_ms
-                request_timeout_ms=40000,  # Increased to 40 seconds
-                session_timeout_ms=30000,   # Keep at 30 seconds
-                heartbeat_interval_ms=10000,
-                api_version_auto_timeout_ms=30000
-            )
-            
-            # Get partition info to verify connection
-            partitions = consumer.partitions_for_topic(RAW_TOPIC) or set()
-            logger.info(f"✅ Connected to Kafka, topic '{RAW_TOPIC}' has {len(partitions)} partitions")
-            return consumer
-            
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to connect to Kafka: {e}")
-            if attempt < max_retries - 1:
-                logger.info(f"Waiting {retry_delay} seconds...")
-                time.sleep(retry_delay)
+            line_protocol = self.json2tsdb.transform(data)
+            if self.questdb_client.insert_data(self.raw_topic, line_protocol):
+                self.quality.update_stats(is_valid)
             else:
-                logger.error("❌ Failed to connect to Kafka after all retries")
-                raise
+                logger.error("Failed to insert data into QuestDB")
+        except Exception as exc:
+            logger.error("Error inserting data: %s", exc)
 
-# ====================
-# Main Pipeline
-# ====================
+    def run(self) -> None:
+        self.print_banner()
+        self.validate_settings()
 
-def main():
-    validate_settings()
+        logger.info("Waiting 15 seconds for Kafka to be ready...")
+        time.sleep(15)
 
-    # Wait for Kafka to be ready
-    logger.info("Waiting 15 seconds for Kafka to be ready...")
-    time.sleep(15)
-    
-    # Initialize quality checker
-    quality = SimpleQualityChecker()
-    
-    # Define schema for QuestDB table
-    schema = {
-        'tags': ['lab', 'sensor_id', 'measurement_type', 'unit', 'qualityflag'],     
-        'fields': ['value']
-    }
-    
-    # Create table in QuestDB
-    if questdb_client.create_table(RAW_TOPIC, schema):
-        logger.info(f"✅ Table '{RAW_TOPIC}' is ready in QuestDB")
-    
-    # Create transformer
-    json2tsdb = Json2TsdbTransformer(
-        table_name=RAW_TOPIC, 
-        tag_keys=schema.get('tags'), 
-        field_keys=schema.get('fields')
-    )
-    
-    # Create Kafka consumer
-    try:
-        consumer = create_consumer()
-    except Exception as e:
-        logger.error(f"Failed to create consumer: {e}")
-        sys.exit(1)
-    
-    print("\n👂 Listening for sensor data...")
-    print("-" * 70)
-    
-    message_count = 0
-    
-    try:
-        # Main consumption loop
-        while True:
-            # Poll for messages with timeout
-            messages = consumer.poll(timeout_ms=1000)
-            
-            if not messages:
-                # No messages received, continue polling
-                continue
-            
-            # Process messages
-            for topic_partition, records in messages.items():
-                for message in records:
-                    data = message.value
-                    
-                    # Count received messages
-                    quality.stats["total_received"] += 1
-                    message_count += 1
-                    
-                    if message_count % 10 == 0:
-                        logger.info(f"Received {message_count} messages from Kafka")
-                    
-                    # Authentication check
-                    auth_ok, auth_reason = is_authenticated(data)
-                    
-                    # Quality validation
-                    if auth_ok:
-                        is_valid, errors = quality.validate_record(data)
-                    else:
-                        is_valid = False
-                        errors = [f"auth_failed:{auth_reason}"]
-                        quality.stats["auth_failed"] += 1
-                    
-                    # Add quality metadata
-                    data["qualityflag"] = str(is_valid)
-                    if not is_valid and errors:
-                        data["qualityflag"] = ",".join(errors[:3])
-                    
-                    # Insert into QuestDB
-                    try:
-                        line_protocol = json2tsdb.transform(data)
-                        if questdb_client.insert_data(RAW_TOPIC, line_protocol):
-                            quality.update_stats(is_valid)
-                        else:
-                            logger.error(f"Failed to insert data into QuestDB")
-                    except Exception as e:
-                        logger.error(f"Error inserting data: {e}")
-    
-    except KeyboardInterrupt:
-        print("\n\n🛑 Stopped by user")
-    
-    finally:
-        consumer.close()
-        print("\n📊 FINAL STATISTICS:")
-        quality.print_stats()
-        print(f"Total messages consumed: {message_count}")
+        self.setup_tsdb()
+
+        try:
+            self.create_consumer()
+        except Exception as exc:
+            logger.error("Failed to create consumer: %s", exc)
+            sys.exit(1)
+
+        print("\n👂 Listening for sensor data...")
+        print("-" * 70)
+
+        try:
+            while True:
+                if not self.consumer:
+                    raise RuntimeError("Consumer is not initialized")
+
+                messages = self.consumer.poll(timeout_ms=1000)
+                if not messages:
+                    continue
+
+                for _topic_partition, records in messages.items():
+                    for message in records:
+                        data = message.value
+                        self.quality.stats["total_received"] += 1
+                        self.message_count += 1
+
+                        if self.message_count % 10 == 0:
+                            logger.info("Received %d messages from Kafka", self.message_count)
+
+                        self.process_record(data)
+
+        except KeyboardInterrupt:
+            print("\n\n🛑 Stopped by user")
+        finally:
+            if self.consumer:
+                self.consumer.close()
+            print("\n📊 FINAL STATISTICS:")
+            self.quality.print_stats()
+            print(f"Total messages consumed: {self.message_count}")
+
+
+def main() -> None:
+    KafkaToTsdbConsumerService().run()
+
 
 if __name__ == "__main__":
     main()
