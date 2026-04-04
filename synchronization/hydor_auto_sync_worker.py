@@ -30,8 +30,19 @@ sync_helpers = SyncHelpers()
 questdbclient = QuestDBClient()
 
 # Global variables
-#BATCH_SIZE = 50  # Default batch size
-BATCH_SIZE = int(os.getenv("BATCH_SIZE"))
+def _get_batch_size() -> int:
+    """
+    Safely parse BATCH_SIZE from environment with a sane default.
+    """
+    raw_value = os.getenv("BATCH_SIZE", "50")
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid BATCH_SIZE={raw_value!r}; defaulting to 50")
+        return 50
+
+
+BATCH_SIZE = _get_batch_size()
 table_name = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
 
 # =============================
@@ -47,11 +58,7 @@ async def sync_worker():
     
     # Get BATCH_SIZE with fallback
     global BATCH_SIZE
-    try:
-        BATCH_SIZE = int(os.getenv("BATCH_SIZE", "50"))
-    except (ValueError, TypeError):
-        BATCH_SIZE = 50
-        logger.warning(f"Invalid BATCH_SIZE, using default: {BATCH_SIZE}")
+    BATCH_SIZE = _get_batch_size()
     
     # Get table_name with fallback
     global table_name
