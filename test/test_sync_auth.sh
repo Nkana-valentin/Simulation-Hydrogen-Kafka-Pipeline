@@ -1,58 +1,69 @@
 #!/bin/bash
 
+set -euo pipefail
+
+API_BASE_URL="${API_BASE_URL:-http://localhost:8080}"
+
+extract_json_field() {
+  local field="$1"
+  python3 -c "import json,sys; data=json.load(sys.stdin); print(data.get('${field}',''))"
+}
+
 echo "🔐 Testing Hydrogen Sync Service with Authentication"
 echo "===================================================="
+echo "Using API base URL: ${API_BASE_URL}"
 
-# Step 1: Check auth service
-echo -n "1. Auth service health: "
-HEALTH=$(curl -s http://localhost:8001/auth/health | python3 -c "import sys, json; print(json.load(sys.stdin).get('status', 'error'))")
-echo "$HEALTH"
+# Step 1: Check auth service on main API
+printf "1. Auth service health: "
+HEALTH=$(curl -sS "${API_BASE_URL}/health" | extract_json_field "status")
+echo "${HEALTH}"
 
-if [ "$HEALTH" != "healthy" ]; then
-    echo "❌ Auth service not running. Start it with: python -m auth_service.auth_server"
-    exit 1
+if [ "${HEALTH}" != "healthy" ]; then
+  echo "❌ Auth service not healthy at ${API_BASE_URL}/health"
+  exit 1
 fi
 
 # Step 2: Get researcher token
-echo -n "2. Getting researcher token: "
-TOKEN=$(curl -s -X POST http://localhost:8001/auth/researcher/login \
+printf "2. Getting researcher token: "
+TOKEN=$(curl -sS -X POST "${API_BASE_URL}/researcher/login" \
   -H "Content-Type: application/json" \
   -d '{"username": "dr_smith", "password": "research2024", "institution": "APSU"}' \
-  | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+  | python3 -c "import sys, json; print(json.load(sys.stdin).get('access_token', ''))")
+
+if [ -z "${TOKEN}" ]; then
+  echo "❌ Failed to get researcher token"
+  exit 1
+fi
+
 echo "✅ (token: ${TOKEN:0:20}...)"
 
-# Step 3: Test debug endpoint
-echo -n "3. Testing token with debug endpoint: "
-RESPONSE=$(curl -s -w "%{http_code}" -X GET http://localhost:8080/api/debug/token-info \
-  -H "Authorization: Bearer $TOKEN")
-HTTP_CODE="${RESPONSE: -3}"
-if [ "$HTTP_CODE" = "200" ]; then
-    echo "✅ (200 OK)"
-else
-    echo "❌ (HTTP $HTTP_CODE)"
-fi
-
-# Step 4: Trigger sync
-echo -n "4. Triggering data sync: "
-RESPONSE=$(curl -s -w "%{http_code}" -X POST http://localhost:8080/api/sync/trigger \
-  -H "Authorization: Bearer $TOKEN" \
+# Step 3: Trigger sync
+printf "3. Triggering data sync: "
+HTTP_CODE=$(curl -sS -o /tmp/sync_trigger_response.json -w "%{http_code}" \
+  -X POST "${API_BASE_URL}/sync/trigger" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json")
-HTTP_CODE="${RESPONSE: -3}"
-if [ "$HTTP_CODE" = "200" ]; then
-    echo "✅ (200 OK)"
+
+if [ "${HTTP_CODE}" = "200" ]; then
+  echo "✅ (200 OK)"
 else
-    echo "❌ (HTTP $HTTP_CODE)"
+  echo "❌ (HTTP ${HTTP_CODE})"
+  cat /tmp/sync_trigger_response.json
+  exit 1
 fi
 
-# Step 5: Check sync status
-echo -n "5. Checking sync status: "
-RESPONSE=$(curl -s -w "%{http_code}" -X GET http://localhost:8080/api/sync/status \
-  -H "Authorization: Bearer $TOKEN")
-HTTP_CODE="${RESPONSE: -3}"
-if [ "$HTTP_CODE" = "200" ]; then
-    echo "✅ (200 OK)"
+# Step 4: Check sync status
+printf "4. Checking sync status: "
+HTTP_CODE=$(curl -sS -o /tmp/sync_status_response.json -w "%{http_code}" \
+  -X GET "${API_BASE_URL}/sync/status" \
+  -H "Authorization: Bearer ${TOKEN}")
+
+if [ "${HTTP_CODE}" = "200" ]; then
+  echo "✅ (200 OK)"
 else
-    echo "❌ (HTTP $HTTP_CODE)"
+  echo "❌ (HTTP ${HTTP_CODE})"
+  cat /tmp/sync_status_response.json
+  exit 1
 fi
 
 echo "===================================================="
