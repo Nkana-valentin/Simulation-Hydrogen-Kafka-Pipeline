@@ -5,12 +5,12 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from kafka import KafkaConsumer
 
 from ingestion.json_tsdb_manager import Json2TsdbTransformer
+from ingestion.quality_check import DataQualityChecker
 from ingestion.questdbclient import QuestDBClient
 
 
@@ -21,72 +21,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class SimpleQualityChecker:
-    def __init__(self) -> None:
-        self.rules = {
-            "temperature": {"min": -50, "max": 500},
-            "pressure": {"min": 0, "max": 1000},
-            "flow": {"min": 0, "max": 100},
-            "voltage": {"min": 0, "max": 1000},
-            "current": {"min": 0, "max": 100},
-            "efficiency": {"min": 0, "max": 100},
-        }
-        self.stats = {
-            "total_received": 0,
-            "auth_failed": 0,
-            "processed": 0,
-            "valid": 0,
-            "invalid": 0,
-        }
-        self.required_fields = ["timestamp", "sensor_id", "measurement_type", "value", "unit"]
-
-    def validate_record(self, record: Dict) -> Tuple[bool, List[str]]:
-        errors: List[str] = []
-
-        for field in self.required_fields:
-            if field not in record:
-                errors.append(f"missing_field:{field}")
-
-        if errors:
-            return False, errors
-
-        try:
-            datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
-        except Exception as exc:
-            errors.append(f"invalid_timestamp:{str(exc)}")
-
-        try:
-            value = float(record["value"])
-            measurement_type = str(record.get("measurement_type", "")).lower()
-            if measurement_type in self.rules:
-                rule = self.rules[measurement_type]
-                if value < rule["min"]:
-                    errors.append(f"value_below_min:{value}<{rule['min']}")
-                if value > rule["max"]:
-                    errors.append(f"value_above_max:{value}>{rule['max']}")
-        except (ValueError, TypeError):
-            errors.append(f"value_not_numeric:{record.get('value')}")
-
-        return len(errors) == 0, errors
-
-    def update_stats(self, is_valid: bool) -> None:
-        self.stats["processed"] += 1
-        if is_valid:
-            self.stats["valid"] += 1
-        else:
-            self.stats["invalid"] += 1
-
-    def print_stats(self) -> None:
-        print("\n" + "-" * 50)
-        print("📊 QUALITY STATS:")
-        print(f"   📥 Total Received: {self.stats['total_received']}")
-        print(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
-        print(f"   ⚙️  Processed: {self.stats['processed']}")
-        print(f"   ├─ ✅ Valid: {self.stats['valid']}")
-        print(f"   └─ ❌ Invalid: {self.stats['invalid']}")
-        print("-" * 50)
-
-
 class KafkaToTsdbConsumerService:
     """Encapsulated ingestion pipeline from Kafka to QuestDB."""
 
@@ -94,7 +28,7 @@ class KafkaToTsdbConsumerService:
         self.kafka_broker = os.getenv("KAFKA_BROKER", "broker:9092")
         self.raw_topic = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
         self.questdb_client = QuestDBClient()
-        self.quality = SimpleQualityChecker()
+        self.quality = DataQualityChecker()
         self.schema = {
             "tags": ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"],
             "fields": ["value"],
@@ -191,7 +125,18 @@ class KafkaToTsdbConsumerService:
         auth_ok, auth_reason = self.is_authenticated(data)
 
         if auth_ok:
-            is_valid, errors = self.quality.validate_record(data)
+            validation_record = dict(data)
+            measurement_type = str(data.get("measurement_type", "")).lower()
+            metric_map = {"flow": "flow_rate"}
+            metric_field = metric_map.get(measurement_type, measurement_type)
+            if metric_field:
+                raw_value = data.get("value")
+                try:
+                    validation_record[metric_field] = float(raw_value)
+                except (TypeError, ValueError):
+                    validation_record[metric_field] = raw_value
+
+            is_valid, errors = self.quality.validate_single_record(validation_record)
         else:
             is_valid = False
             errors = [f"auth_failed:{auth_reason}"]

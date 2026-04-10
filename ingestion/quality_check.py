@@ -224,6 +224,14 @@ class DataQualityChecker:
                 config_path: str = "config/quality_rules.json"):
         self.rules = self._load_rules(config_path)
         self.validation_results = []
+        self.stats = {
+            "total_received": 0,
+            "auth_failed": 0,
+            "processed": 0,
+            "valid": 0,
+            "invalid": 0,
+            "quarantined": 0,
+        }
         
     def _load_rules(self, 
                 config_path: str) -> Dict[str, QualityRule]:
@@ -264,11 +272,22 @@ class DataQualityChecker:
         Returns:
             Timezone-aware datetime object
         """
-        # Parse the timestamp
-        dt = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-        
-        # Add UTC timezone
-        return dt.replace(tzinfo=timezone.utc)
+        # Support both millisecond and plain ISO-8601 formats.
+        try:
+            dt = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+
+    def update_stats(self, is_valid: bool) -> None:
+        self.stats["processed"] += 1
+        if is_valid:
+            self.stats["valid"] += 1
+        else:
+            self.stats["invalid"] += 1
     
     def validate_single_record(self, 
                             record: Dict[str, Any]) -> Tuple[bool, List[str]]:
