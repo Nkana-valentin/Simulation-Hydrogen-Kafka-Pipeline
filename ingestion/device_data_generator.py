@@ -283,7 +283,7 @@ def generate_record(device, force_issues=True):
             }
     else:
         # Missing auth section entirely
-        print(f"   ⚠️ Missing auth section")
+        print(f" ⚠️ Missing auth section")
     
     # Add quality flag (null or with issues)
     record["qualityflag"] = None
