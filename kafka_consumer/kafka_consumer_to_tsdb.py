@@ -123,24 +123,26 @@ class KafkaToTsdbConsumerService:
 
     def process_record(self, data: Dict) -> None:
         auth_ok, auth_reason = self.is_authenticated(data)
+        quality_record = dict(data)
 
         if auth_ok:
-            validation_record = dict(data)
             measurement_type = str(data.get("measurement_type", "")).lower()
             metric_map = {"flow": "flow_rate"}
             metric_field = metric_map.get(measurement_type, measurement_type)
             if metric_field:
                 raw_value = data.get("value")
                 try:
-                    validation_record[metric_field] = float(raw_value)
+                    quality_record[metric_field] = float(raw_value)
                 except (TypeError, ValueError):
-                    validation_record[metric_field] = raw_value
+                    quality_record[metric_field] = raw_value
 
-            is_valid, errors = self.quality.validate_single_record(validation_record)
+            is_valid, errors = self.quality.validate_single_record(quality_record)
         else:
             is_valid = False
             errors = [f"auth_failed:{auth_reason}"]
             self.quality.stats["auth_failed"] += 1
+
+        self.quality.print_record_quality_dimensions(quality_record)
 
         data["qualityflag"] = str(is_valid)
         if not is_valid and errors:

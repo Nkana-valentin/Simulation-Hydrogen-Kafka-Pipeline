@@ -224,6 +224,9 @@ class DataQualityChecker:
                 config_path: str = "config/quality_rules.json"):
         self.rules = self._load_rules(config_path)
         self.validation_results = []
+        self.metrics = DataQualityMetrics()
+        self.metric_history: Dict[str, List[float]] = {}
+        self.wqs_history: List[float] = []
         self.stats = {
             "total_received": 0,
             "auth_failed": 0,
@@ -288,6 +291,81 @@ class DataQualityChecker:
             self.stats["valid"] += 1
         else:
             self.stats["invalid"] += 1
+
+    def evaluate_record_quality_dimensions(self, record: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Compute all quality dimensions for a single incoming record.
+        """
+        numeric_values: List[float] = []
+        for field_name in self.rules:
+            if field_name == "timestamp":
+                continue
+            if field_name in record:
+                try:
+                    numeric_value = float(record[field_name])
+                except (TypeError, ValueError):
+                    continue
+                numeric_values.append(numeric_value)
+                history = self.metric_history.setdefault(field_name, [])
+                history.append(numeric_value)
+                if len(history) > self.metrics.window_size:
+                    history.pop(0)
+
+        accuracy_scores = []
+        for field_name, history in self.metric_history.items():
+            if field_name in record and history:
+                accuracy_scores.append(self.metrics.compute_accuracy_score(history))
+        accuracy = float(np.mean(accuracy_scores)) if accuracy_scores else 0.0
+
+        completeness = self.metrics.compute_content_completeness(record)
+        temporal_completeness = self.metrics.compute_temporal_completeness(
+            observed=min(self.stats["processed"] + 1, self.metrics.window_size),
+            expected=self.metrics.window_size,
+        )
+
+        timeliness = 0.0
+        timestamp_raw = record.get("timestamp")
+        if isinstance(timestamp_raw, str):
+            try:
+                timeliness = self.metrics.compute_timeliness(self._parse_timestamp(timestamp_raw))
+            except ValueError:
+                timeliness = 0.0
+
+        consistency = 1.0 if numeric_values else 0.0
+        wqs = self.metrics.compute_wqs(accuracy, completeness)
+        lwqs = self.metrics.compute_lwqs(self.wqs_history)
+        qsd = self.metrics.compute_qsd(wqs, lwqs)
+        self.wqs_history.append(wqs)
+        if len(self.wqs_history) > self.metrics.window_size:
+            self.wqs_history.pop(0)
+
+        return {
+            "accuracy": accuracy,
+            "completeness": completeness,
+            "temporal_completeness": temporal_completeness,
+            "consistency": consistency,
+            "timeliness": timeliness,
+            "wqs": wqs,
+            "lwqs": lwqs,
+            "qsd": qsd,
+        }
+
+    def print_record_quality_dimensions(self, record: Dict[str, Any]) -> None:
+        """
+        Print all quality dimensions for one record.
+        """
+        dimensions = self.evaluate_record_quality_dimensions(record)
+        print(
+            "📐 QUALITY DIMENSIONS | "
+            f"accuracy={dimensions['accuracy']:.3f} | "
+            f"completeness={dimensions['completeness']:.3f} | "
+            f"temporal_completeness={dimensions['temporal_completeness']:.3f} | "
+            f"consistency={dimensions['consistency']:.3f} | "
+            f"timeliness={dimensions['timeliness']:.3f} | "
+            f"wqs={dimensions['wqs']:.3f} | "
+            f"lwqs={dimensions['lwqs']:.3f} | "
+            f"qsd={dimensions['qsd']:.3f}"
+        )
     
     def validate_single_record(self, 
                             record: Dict[str, Any]) -> Tuple[bool, List[str]]:
