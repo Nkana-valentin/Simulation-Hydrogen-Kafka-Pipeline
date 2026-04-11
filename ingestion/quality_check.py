@@ -224,6 +224,17 @@ class DataQualityChecker:
                 config_path: str = "config/quality_rules.json"):
         self.rules = self._load_rules(config_path)
         self.validation_results = []
+        self.metrics = DataQualityMetrics()
+        self.metric_history: Dict[str, List[float]] = {}
+        self.wqs_history: List[float] = []
+        self.stats = {
+            "total_received": 0,
+            "auth_failed": 0,
+            "processed": 0,
+            "valid": 0,
+            "invalid": 0,
+            "quarantined": 0,
+        }
         
     def _load_rules(self, 
                 config_path: str) -> Dict[str, QualityRule]:
@@ -264,11 +275,96 @@ class DataQualityChecker:
         Returns:
             Timezone-aware datetime object
         """
-        # Parse the timestamp
-        dt = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-        
-        # Add UTC timezone
-        return dt.replace(tzinfo=timezone.utc)
+        # Support both millisecond and plain ISO-8601 formats.
+        try:
+            dt = datetime.strptime(timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+
+    def update_stats(self, is_valid: bool) -> None:
+        self.stats["processed"] += 1
+        if is_valid:
+            self.stats["valid"] += 1
+        else:
+            self.stats["invalid"] += 1
+
+    def evaluate_record_quality_dimensions(self, record: Dict[str, Any]) -> Dict[str, float]:
+        """
+        Compute all quality dimensions for a single incoming record.
+        """
+        numeric_values: List[float] = []
+        for field_name in self.rules:
+            if field_name == "timestamp":
+                continue
+            if field_name in record:
+                try:
+                    numeric_value = float(record[field_name])
+                except (TypeError, ValueError):
+                    continue
+                numeric_values.append(numeric_value)
+                history = self.metric_history.setdefault(field_name, [])
+                history.append(numeric_value)
+                if len(history) > self.metrics.window_size:
+                    history.pop(0)
+
+        accuracy_scores = []
+        for field_name, history in self.metric_history.items():
+            if field_name in record and history:
+                accuracy_scores.append(self.metrics.compute_accuracy_score(history))
+        accuracy = float(np.mean(accuracy_scores)) if accuracy_scores else 0.0
+
+        completeness = self.metrics.compute_content_completeness(record)
+        temporal_completeness = self.metrics.compute_temporal_completeness(
+            observed=min(self.stats["processed"] + 1, self.metrics.window_size),
+            expected=self.metrics.window_size,
+        )
+
+        timeliness = 0.0
+        timestamp_raw = record.get("timestamp")
+        if isinstance(timestamp_raw, str):
+            try:
+                timeliness = self.metrics.compute_timeliness(self._parse_timestamp(timestamp_raw))
+            except ValueError:
+                timeliness = 0.0
+
+        consistency = 1.0 if numeric_values else 0.0
+        wqs = self.metrics.compute_wqs(accuracy, completeness)
+        lwqs = self.metrics.compute_lwqs(self.wqs_history)
+        qsd = self.metrics.compute_qsd(wqs, lwqs)
+        self.wqs_history.append(wqs)
+        if len(self.wqs_history) > self.metrics.window_size:
+            self.wqs_history.pop(0)
+
+        return {
+            "accuracy": accuracy,
+            "completeness": completeness,
+            "temporal_completeness": temporal_completeness,
+            "consistency": consistency,
+            "timeliness": timeliness,
+            "wqs": wqs,
+            "lwqs": lwqs,
+            "qsd": qsd,
+        }
+
+    def print_record_quality_dimensions(self, record: Dict[str, Any]) -> None:
+        """
+        Print all quality dimensions for one record.
+        """
+        dimensions = self.evaluate_record_quality_dimensions(record)
+        logger.info("📐 QUALITY DIMENSIONS | "
+            f"accuracy={dimensions['accuracy']:.3f} | "
+            f"completeness={dimensions['completeness']:.3f} | "
+            f"temporal_completeness={dimensions['temporal_completeness']:.3f} | "
+            f"consistency={dimensions['consistency']:.3f} | "
+            f"timeliness={dimensions['timeliness']:.3f} | "
+            f"wqs={dimensions['wqs']:.3f} | "
+            f"lwqs={dimensions['lwqs']:.3f} | "
+            f"qsd={dimensions['qsd']:.3f}"
+        )
     
     def validate_single_record(self, 
                             record: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -452,23 +548,23 @@ class DataQualityChecker:
         """
         Print current statistics
         """
-        print("\n" + "-" * 50)
-        print(f"📊 QUALITY STATS:")
-        print(f"   📥 Total Received: {self.stats['total_received']}")
-        print(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
-        print(f"   ⚙️  Processed: {self.stats['processed']}")
-        print(f"   ├─ ✅ Valid: {self.stats['valid']}")
-        print(f"   └─ ❌ Invalid: {self.stats['invalid']}")
-        print(f"   📁 Quarantined: {self.stats['quarantined']}")
+        logger.info("\n" + "-" * 50)
+        logger.info("📊 QUALITY STATS:")
+        logger.info(f"   📥 Total Received: {self.stats['total_received']}")
+        logger.info(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
+        logger.info(f"   ⚙️  Processed: {self.stats['processed']}")
+        logger.info(f"   ├─ ✅ Valid: {self.stats['valid']}")
+        logger.info(f"   └─ ❌ Invalid: {self.stats['invalid']}")
+        logger.info(f"   📁 Quarantined: {self.stats['quarantined']}")
         
         if self.stats['total_received'] > 0:
             auth_success_rate = ((self.stats['total_received'] - self.stats['auth_failed']) / self.stats['total_received']) * 100
             valid_rate = (self.stats['valid'] / self.stats['total_received']) * 100
-            print(f"\n   📈 Rates:")
-            print(f"      Auth Success: {auth_success_rate:.1f}%")
-            print(f"      Valid Data: {valid_rate:.1f}%")
-            print(f"      Overall Yield: {valid_rate:.1f}%")
-        print("-" * 50)    
+            logger.info(f"\n   📈 Rates:")
+            logger.info(f"      Auth Success: {auth_success_rate:.1f}%")
+            logger.info(f"      Valid Data: {valid_rate:.1f}%")
+            logger.info(f"      Overall Yield: {valid_rate:.1f}%")
+        logger.info("-" * 50)    
 
 # # Example usage
 # if __name__ == "__main__":
