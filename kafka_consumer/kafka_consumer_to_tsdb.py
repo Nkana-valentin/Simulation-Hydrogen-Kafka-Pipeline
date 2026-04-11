@@ -175,6 +175,12 @@ class KafkaToTsdbConsumerService:
         print("\n👂 Listening for sensor data...")
         print("-" * 70)
 
+        # ✅ NEW: stats configuration
+        STATS_EVERY_N_MESSAGES = 100
+        STATS_EVERY_SECONDS = 30
+
+        last_stats_time = time.time()
+
         try:
             while True:
                 if not self.consumer:
@@ -190,16 +196,31 @@ class KafkaToTsdbConsumerService:
                         self.quality.stats["total_received"] += 1
                         self.message_count += 1
 
+                        # Log every 10 messages (existing)
                         if self.message_count % 10 == 0:
                             logger.info("Received %d messages from Kafka", self.message_count)
 
                         self.process_record(data)
 
+                        # ✅ NEW: periodic stats (by message count)
+                        if self.message_count % STATS_EVERY_N_MESSAGES == 0:
+                            logger.info("📊 Periodic stats (message-based):")
+                            self.quality.print_stats()
+
+                        # ✅ NEW: periodic stats (by time)
+                        current_time = time.time()
+                        if current_time - last_stats_time >= STATS_EVERY_SECONDS:
+                            logger.info("⏱️ Periodic stats (time-based):")
+                            self.quality.print_stats()
+                            last_stats_time = current_time
+
         except KeyboardInterrupt:
             print("\n\n🛑 Stopped by user")
+
         finally:
             if self.consumer:
                 self.consumer.close()
+
             print("\n📊 FINAL STATISTICS:")
             self.quality.print_stats()
             print(f"Total messages consumed: {self.message_count}")

@@ -355,8 +355,7 @@ class DataQualityChecker:
         Print all quality dimensions for one record.
         """
         dimensions = self.evaluate_record_quality_dimensions(record)
-        print(
-            "📐 QUALITY DIMENSIONS | "
+        logger.info("📐 QUALITY DIMENSIONS | "
             f"accuracy={dimensions['accuracy']:.3f} | "
             f"completeness={dimensions['completeness']:.3f} | "
             f"temporal_completeness={dimensions['temporal_completeness']:.3f} | "
@@ -549,23 +548,23 @@ class DataQualityChecker:
         """
         Print current statistics
         """
-        print("\n" + "-" * 50)
-        print(f"📊 QUALITY STATS:")
-        print(f"   📥 Total Received: {self.stats['total_received']}")
-        print(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
-        print(f"   ⚙️  Processed: {self.stats['processed']}")
-        print(f"   ├─ ✅ Valid: {self.stats['valid']}")
-        print(f"   └─ ❌ Invalid: {self.stats['invalid']}")
-        print(f"   📁 Quarantined: {self.stats['quarantined']}")
+        logger.info("\n" + "-" * 50)
+        logger.info("📊 QUALITY STATS:")
+        logger.info(f"   📥 Total Received: {self.stats['total_received']}")
+        logger.info(f"   🔒 Auth Failed: {self.stats['auth_failed']}")
+        logger.info(f"   ⚙️  Processed: {self.stats['processed']}")
+        logger.info(f"   ├─ ✅ Valid: {self.stats['valid']}")
+        logger.info(f"   └─ ❌ Invalid: {self.stats['invalid']}")
+        logger.info(f"   📁 Quarantined: {self.stats['quarantined']}")
         
         if self.stats['total_received'] > 0:
             auth_success_rate = ((self.stats['total_received'] - self.stats['auth_failed']) / self.stats['total_received']) * 100
             valid_rate = (self.stats['valid'] / self.stats['total_received']) * 100
-            print(f"\n   📈 Rates:")
-            print(f"      Auth Success: {auth_success_rate:.1f}%")
-            print(f"      Valid Data: {valid_rate:.1f}%")
-            print(f"      Overall Yield: {valid_rate:.1f}%")
-        print("-" * 50)    
+            logger.info(f"\n   📈 Rates:")
+            logger.info(f"      Auth Success: {auth_success_rate:.1f}%")
+            logger.info(f"      Valid Data: {valid_rate:.1f}%")
+            logger.info(f"      Overall Yield: {valid_rate:.1f}%")
+        logger.info("-" * 50)    
 
 # # Example usage
 # if __name__ == "__main__":
