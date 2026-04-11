@@ -47,58 +47,58 @@ tsdb_schema:
     partition_by: DAY
 
   # Dimensions (labels / indexed metadata)
-  tags:
-    - name: tenant
-      type: STRING
-      required: false
-    - name: site
-      type: STRING
-      required: false
-    - name: line
-      type: STRING
-      required: false
-    - name: asset_id
-      type: STRING
-      required: false
-    - name: sensor_id
-      type: STRING
-      required: true
-    - name: measurement_type
-      type: STRING
-      required: true
-    - name: unit
-      type: STRING
-      required: false
-    - name: qualityflag
-      type: STRING
-      required: false
-    - name: source
-      type: STRING
-      required: false
+  tags:  [lab, sensor_id, measurement_type, unit]
+    # - name: tenant
+    #   type: STRING
+    #   required: false
+    # - name: site
+    #   type: STRING
+    #   required: false
+    # - name: line
+    #   type: STRING
+    #   required: false
+    # - name: asset_id
+    #   type: STRING
+    # #   required: false
+    # - name: sensor_id
+    #   type: STRING
+    #   required: true
+    # - name: measurement_type
+    #   type: STRING
+    #   required: true
+    # - name: unit
+    #   type: STRING
+    #   required: true
+    # - name: qualityflag
+    #   type: STRING
+    #   required: true
+    # - name: source
+    #   type: STRING
+    #   required: false
 
   # Metrics (values stored per point)
-  fields:
-    - name: value
-      type: DOUBLE
-      required: true
-    - name: min_value
-      type: DOUBLE
-      required: false
-    - name: max_value
-      type: DOUBLE
-      required: false
-    - name: set_point
-      type: DOUBLE
-      required: false
-    - name: status_code
-      type: STRING
-      required: false
-    - name: message
-      type: STRING
-      required: false
+  fields: [value]
+    # - name: value
+    #   type: DOUBLE
+    # required: true
+    # - name: min_value
+    #   type: DOUBLE
+    #   required: false
+    # - name: max_value
+    #   type: DOUBLE
+    #   required: false
+    # - name: set_point
+    #   type: DOUBLE
+    #   required: false
+    # - name: status_code
+    #   type: STRING
+    #   required: false
+    # - name: message
+    #   type: STRING
+    #   required: false
 
   # Optional schema variants by domain. Consumers can opt into one profile.
-  profiles:
-    hydrogen_lab:
-      tags: [lab, sensor_id, measurement_type, unit, qualityflag]
-      fields: [value]
+  # profiles:
+  #   hydrogen_lab:
+  #     tags: [lab, sensor_id, measurement_type, unit, qualityflag]
+  #     fields: [value]

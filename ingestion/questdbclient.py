@@ -52,7 +52,8 @@ class QuestDBClient:
         return names
 
     @staticmethod
-    def _extract_types(items: Optional[List[Union[str, Dict]]], default_type: str) -> Dict[str, str]:
+    def _extract_types(items: Optional[List[Union[str, Dict]]], 
+                    default_type: str) -> Dict[str, str]:
         column_types: Dict[str, str] = {}
         for item in items or []:
             if isinstance(item, str):
@@ -76,15 +77,15 @@ class QuestDBClient:
             tags = profile_cfg.get("tags", tags)
             fields = profile_cfg.get("fields", fields)
 
-        if not tags:
-            tags = ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"]
-        if not fields:
-            fields = ["value"]
+        # if not tags:
+        #     tags = ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"]
+        # if not fields:
+        #     fields = ["value"]
 
         tag_types = self._extract_types(tags_cfg, "STRING")
-        field_types = self._extract_types(fields_cfg, "STRING")
+        field_types = self._extract_types(fields_cfg, "FLOAT")
         for field in fields:
-            field_types.setdefault(field, "DOUBLE" if field == "value" else "STRING")
+            field_types.setdefault(field, "FLOAT")
         for tag in tags:
             tag_types.setdefault(tag, "STRING")
 
@@ -165,7 +166,7 @@ class QuestDBClient:
                 columns.append(f"{tag} {tag_types.get(tag, 'STRING')}")
             
             for field in schema.get('fields', []):
-                columns.append(f"{field} {field_types.get(field, 'STRING')}")
+                columns.append(f"{field} {field_types.get(field, 'FLOAT')}")
             
             # QuestDB CREATE TABLE syntax
             create_query = f"""
