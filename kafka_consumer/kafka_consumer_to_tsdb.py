@@ -1,4 +1,9 @@
-"""Kafka consumer pipeline with authentication and quality checks."""
+"""
+Kafka consumer pipeline with authentication and quality checks.
+This module implements a Kafka consumer that reads sensor data from a specified topic, 
+performs authentication checks, evaluates data quality dimensions, 
+and inserts valid records into QuestDB. It also maintains and logs statistics about the ingestion process.
+"""
 
 import json
 import logging
@@ -22,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 
 class KafkaToTsdbConsumerService:
-    """Encapsulated ingestion pipeline from Kafka to QuestDB."""
+    """
+    Encapsulated ingestion pipeline from Kafka to QuestDB.
+    """
 
     def __init__(self) -> None:
         self.kafka_broker = os.getenv("KAFKA_BROKER", "broker:9092")
@@ -175,7 +182,7 @@ class KafkaToTsdbConsumerService:
         print("\n👂 Listening for sensor data...")
         print("-" * 70)
 
-        # ✅ NEW: stats configuration
+        # ✅ stats configuration
         STATS_EVERY_N_MESSAGES = 100
         STATS_EVERY_SECONDS = 30
 
@@ -202,12 +209,12 @@ class KafkaToTsdbConsumerService:
 
                         self.process_record(data)
 
-                        # ✅ NEW: periodic stats (by message count)
+                        # ✅ periodic stats (by message count)
                         if self.message_count % STATS_EVERY_N_MESSAGES == 0:
                             logger.info("📊 Periodic stats (message-based):")
                             self.quality.print_stats()
 
-                        # ✅ NEW: periodic stats (by time)
+                        # ✅ periodic stats (by time)
                         current_time = time.time()
                         if current_time - last_stats_time >= STATS_EVERY_SECONDS:
                             logger.info("⏱️ Periodic stats (time-based):")
