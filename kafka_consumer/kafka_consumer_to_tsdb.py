@@ -36,10 +36,7 @@ class KafkaToTsdbConsumerService:
         self.raw_topic = os.getenv("KAFKA_TOPIC_RAW", "raw_h2_data")
         self.questdb_client = QuestDBClient()
         self.quality = DataQualityChecker()
-        self.schema = {
-            "tags": ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"],
-            "fields": ["value"],
-        }
+        self.schema = self.questdb_client.schema
         self.json2tsdb = Json2TsdbTransformer(
             table_name=self.raw_topic,
             tag_keys=self.schema.get("tags"),

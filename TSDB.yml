@@ -36,3 +36,69 @@ sissa:
   auth_token: ${SISSA_API_TOKEN}
   auto_sync: true
   sync_interval: ${SYNC_INTERVAL}
+
+# Generic time-series schema shared by ingestion and table creation.
+# This keeps the project extensible beyond hydrogen-only datasets.
+tsdb_schema:
+  table:
+    name: ${KAFKA_TOPIC_RAW}
+    timestamp_column: timestamp
+    timestamp_type: TIMESTAMP
+    partition_by: DAY
+
+  # Dimensions (labels / indexed metadata)
+  tags:
+    - name: tenant
+      type: STRING
+      required: false
+    - name: site
+      type: STRING
+      required: false
+    - name: line
+      type: STRING
+      required: false
+    - name: asset_id
+      type: STRING
+      required: false
+    - name: sensor_id
+      type: STRING
+      required: true
+    - name: measurement_type
+      type: STRING
+      required: true
+    - name: unit
+      type: STRING
+      required: false
+    - name: qualityflag
+      type: STRING
+      required: false
+    - name: source
+      type: STRING
+      required: false
+
+  # Metrics (values stored per point)
+  fields:
+    - name: value
+      type: DOUBLE
+      required: true
+    - name: min_value
+      type: DOUBLE
+      required: false
+    - name: max_value
+      type: DOUBLE
+      required: false
+    - name: set_point
+      type: DOUBLE
+      required: false
+    - name: status_code
+      type: STRING
+      required: false
+    - name: message
+      type: STRING
+      required: false
+
+  # Optional schema variants by domain. Consumers can opt into one profile.
+  profiles:
+    hydrogen_lab:
+      tags: [lab, sensor_id, measurement_type, unit, qualityflag]
+      fields: [value]

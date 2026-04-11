@@ -29,28 +29,71 @@ class QuestDBClient:
         self.QUESTDB_QUERY_URL = f"http://{self.host}:{self.port}/exec"
         self.QUESTDB_WRITE_URL = f"http://{self.host}:{self.port}/write"
         self.table_name = os.getenv("KAFKA_TOPIC_RAW")
-        self.schema = {
-            'tags': ['lab', 
-                    'sensor_id', 
-                    'measurement_type', 
-                    'unit', 
-                    'qualityflag'],
-            'fields': ['value']
-        }
+        self.schema = self.get_schema_definition()
         
         # Default columns for queries
         self.default_columns = [
-            "timestamp", 
-            "lab", 
-            "sensor_id", 
-            "measurement_type", 
-            "unit", 
-            "qualityflag", 
-            "value"
+            "timestamp",
+            *self.schema.get("tags", []),
+            *self.schema.get("fields", []),
         ]
         
         logger.info(f"🔌 Connected to QuestDB at {self.host}:{self.port}")
         #logger.info(f"🔌 Attempting connection to QuestDB at {self.host}:{self.port}")
+
+    @staticmethod
+    def _extract_names(items: Optional[List[Union[str, Dict]]]) -> List[str]:
+        names: List[str] = []
+        for item in items or []:
+            if isinstance(item, str):
+                names.append(item)
+            elif isinstance(item, dict) and item.get("name"):
+                names.append(str(item["name"]))
+        return names
+
+    @staticmethod
+    def _extract_types(items: Optional[List[Union[str, Dict]]], default_type: str) -> Dict[str, str]:
+        column_types: Dict[str, str] = {}
+        for item in items or []:
+            if isinstance(item, str):
+                column_types[item] = default_type
+            elif isinstance(item, dict) and item.get("name"):
+                column_types[str(item["name"])] = str(item.get("type", default_type)).upper()
+        return column_types
+
+    def get_schema_definition(self, profile: Optional[str] = None) -> Dict[str, Union[List[str], Dict[str, str]]]:
+        tsdb_schema = self.config.get("tsdb_schema", {})
+        tags_cfg = tsdb_schema.get("tags", [])
+        fields_cfg = tsdb_schema.get("fields", [])
+
+        tags = self._extract_names(tags_cfg)
+        fields = self._extract_names(fields_cfg)
+
+        profiles = tsdb_schema.get("profiles", {})
+        profile_name = profile or os.getenv("TSDB_SCHEMA_PROFILE")
+        profile_cfg = profiles.get(profile_name or "", {}) if isinstance(profiles, dict) else {}
+        if profile_cfg:
+            tags = profile_cfg.get("tags", tags)
+            fields = profile_cfg.get("fields", fields)
+
+        if not tags:
+            tags = ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"]
+        if not fields:
+            fields = ["value"]
+
+        tag_types = self._extract_types(tags_cfg, "STRING")
+        field_types = self._extract_types(fields_cfg, "STRING")
+        for field in fields:
+            field_types.setdefault(field, "DOUBLE" if field == "value" else "STRING")
+        for tag in tags:
+            tag_types.setdefault(tag, "STRING")
+
+        return {
+            "tags": tags,
+            "fields": fields,
+            "tag_types": tag_types,
+            "field_types": field_types,
+        }
     
     def _load_config(self) -> Dict:
         """
@@ -115,14 +158,14 @@ class QuestDBClient:
             # Build column definitions
             columns = ["timestamp TIMESTAMP"]
             
+            tag_types = schema.get('tag_types', {})
+            field_types = schema.get('field_types', {})
+
             for tag in schema.get('tags', []):
-                columns.append(f"{tag} STRING")
+                columns.append(f"{tag} {tag_types.get(tag, 'STRING')}")
             
             for field in schema.get('fields', []):
-                if field == 'value':
-                    columns.append("value DOUBLE")
-                else:
-                    columns.append(f"{field} STRING")
+                columns.append(f"{field} {field_types.get(field, 'STRING')}")
             
             # QuestDB CREATE TABLE syntax
             create_query = f"""
