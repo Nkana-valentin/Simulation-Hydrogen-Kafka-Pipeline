@@ -50,6 +50,13 @@
       "institution": "SISSA",
       "roles": ["external_partner"],
       "data_access": ["all"]
+    },
+    {
+      "username": "admin_user",
+      "password": "admin2024",
+      "institution": "APSU",
+      "roles": ["admin"],
+      "data_access": ["all"]
     }
   ]
 }
