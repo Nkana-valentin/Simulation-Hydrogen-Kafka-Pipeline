@@ -1,0 +1,156 @@
+"""
+Orchestrates: Kafka consume → auth check → quality validate → QuestDB insert.
+"""
+import logging
+import math
+import time
+from typing import Any, Dict, List, Optional
+
+import structlog
+
+from domain import quality as dq
+from infrastructure.kafka.consumer import KafkaConsumerClient
+from infrastructure.questdb.client import QuestDBClient
+
+logger = structlog.get_logger(__name__)
+
+_STATS_EVERY_N = 100
+_STATS_EVERY_SECS = 30
+
+
+class IngestionStats:
+    def __init__(self) -> None:
+        self.total_received = 0
+        self.auth_failed = 0
+        self.processed = 0
+        self.valid = 0
+        self.invalid = 0
+
+    def log(self) -> None:
+        total = self.total_received or 1
+        logger.info(
+            "ingestion_stats",
+            total_received=self.total_received,
+            auth_failed=self.auth_failed,
+            valid=self.valid,
+            invalid=self.invalid,
+            yield_pct=round(self.valid / total * 100, 1),
+        )
+
+
+class IngestionService:
+    def __init__(
+        self,
+        kafka: KafkaConsumerClient,
+        questdb: QuestDBClient,
+        table_name: str,
+        schema: Dict[str, Any],
+        validated_table: Optional[str] = None,
+    ) -> None:
+        self._kafka = kafka
+        self._db = questdb
+        self._table = table_name
+        self._validated_table = validated_table
+        self._schema = schema
+        self._schema_fields: List[str] = schema.get("fields", [])
+        self._stats = IngestionStats()
+        self._field_history: Dict[str, List[float]] = {}
+        self._wqs_history: List[float] = []
+        self._processed = 0
+        self._last_good_values: Dict[str, float] = {}
+
+    def setup(self) -> None:
+        self._db.create_table(self._table, self._schema)
+        if self._validated_table:
+            self._db.create_table(self._validated_table, self._schema)
+            logger.info("validated_table_ready", table=self._validated_table)
+
+    def run(self) -> None:
+        logger.info("ingestion_start", broker=self._kafka.broker, topic=self._kafka.topic)
+        self._kafka.connect()
+        last_stats_time = time.time()
+        try:
+            while True:
+                for record in self._kafka.poll_messages():
+                    self._stats.total_received += 1
+                    self._process(record)
+                    self._processed += 1
+
+                    if self._processed % _STATS_EVERY_N == 0:
+                        self._stats.log()
+
+                    now = time.time()
+                    if now - last_stats_time >= _STATS_EVERY_SECS:
+                        self._stats.log()
+                        last_stats_time = now
+
+        except KeyboardInterrupt:
+            logger.info("ingestion_stopped_by_user")
+        finally:
+            self._kafka.close()
+            self._stats.log()
+
+    def _process(self, data: Dict[str, Any]) -> None:
+        auth_ok, auth_reason = self._check_auth(data)
+        if not auth_ok:
+            self._stats.auth_failed += 1
+            logger.warning("auth_failed", reason=auth_reason)
+            return
+
+        # Always store the raw record unchanged
+        raw_row = self._build_row(data)
+        if not self._db.insert_row(self._table, raw_row):
+            logger.error("raw_insert_failed", row_keys=list(raw_row.keys()))
+
+        dims = dq.evaluate_dimensions(
+            data, self._field_history, self._wqs_history, self._processed
+        )
+        logger.debug("quality_dimensions", **{k: round(v, 3) for k, v in dims.items()})
+        self._stats.processed += 1
+
+        if self._validated_table:
+            # Replace NaN/Inf with last known good values, then re-validate
+            cleaned, imputed = dq.clean_record(data, self._last_good_values)
+            if imputed:
+                logger.debug("imputed_fields", fields=imputed)
+            self._update_last_good(data)
+
+            result = dq.validate_record(cleaned)
+            if result.is_valid:
+                self._stats.valid += 1
+                clean_row = self._build_row(cleaned)
+                if not self._db.insert_row(self._validated_table, clean_row):
+                    logger.error("validated_insert_failed", row_keys=list(clean_row.keys()))
+            else:
+                self._stats.invalid += 1
+                logger.warning("dropped_after_clean", errors=result.errors)
+        else:
+            result = dq.validate_record(data)
+            if result.is_valid:
+                self._stats.valid += 1
+            else:
+                self._stats.invalid += 1
+                logger.warning("validation_failed", errors=result.errors)
+
+    def _update_last_good(self, data: Dict[str, Any]) -> None:
+        for key, value in data.items():
+            if key == "timestamp" or not isinstance(value, float):
+                continue
+            if not math.isnan(value) and math.isfinite(value):
+                self._last_good_values[key] = value
+
+    @staticmethod
+    def _check_auth(data: Dict[str, Any]):
+        auth = data.get("auth", {})
+        if not isinstance(auth, dict):
+            return False, "missing_auth_section"
+        if not auth.get("authenticated", False):
+            return False, "not_authenticated_flag"
+        if not auth.get("device_id"):
+            return False, "missing_device_id"
+        return True, "ok"
+
+    def _build_row(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        row = {k: data[k] for k in self._schema_fields if k in data}
+        row["timestamp"] = data.get("timestamp")
+        return row

@@ -1,10 +1,11 @@
 # ingestion/questdbclient.py
 import requests
 import logging
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List, Union, Any
 from datetime import datetime
 import yaml
 import os
+#from questdb.ingress import Sender, IngressError, TimestampNanos
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,9 @@ class QuestDBClient:
     def get_schema_definition(self, profile: Optional[str] = None) -> Dict[str, Union[List[str], Dict[str, str]]]:
         tsdb_schema = self.config.get("tsdb_schema", {})
         tags_cfg = tsdb_schema.get("tags", [])
-        fields_cfg = tsdb_schema.get("fields", [])
+        #fields_cfg = tsdb_schema.get("fields", [])
+        prev_state = tsdb_schema.get("prev_state", [])
+        fields_cfg = prev_state.keys()
 
         tags = self._extract_names(tags_cfg)
         fields = self._extract_names(fields_cfg)
@@ -77,10 +80,6 @@ class QuestDBClient:
             tags = profile_cfg.get("tags", tags)
             fields = profile_cfg.get("fields", fields)
 
-        # if not tags:
-        #     tags = ["lab", "sensor_id", "measurement_type", "unit", "qualityflag"]
-        # if not fields:
-        #     fields = ["value"]
 
         tag_types = self._extract_types(tags_cfg, "STRING")
         field_types = self._extract_types(fields_cfg, "FLOAT")
@@ -281,35 +280,174 @@ class QuestDBClient:
     
     # ==================== Data Insertion Methods ====================
     
-    def insert_data(self, 
-                    table_name: str, 
-                    line_protocol: str) -> bool:
+    # def insert_data(self, 
+    #                 table_name: str, 
+    #                 line_protocol: str) -> bool:
+    #     """
+    #     Insert data using InfluxDB line protocol
+    #     Args:
+    #         table_name: Name of the table to insert into
+    #         line_protocol: Data in InfluxDB line protocol format  
+    #     Returns:
+    #         True if insert successful, False otherwise
+    #     """
+    #     try:
+    #         response = requests.post(
+    #             self.QUESTDB_WRITE_URL,
+    #             data=line_protocol,
+    #             headers={'precision': "n"},
+    #             timeout=10
+    #         )
+            
+    #         if response.status_code in (200, 201, 204):
+    #             logger.debug(f"✅ Data inserted into {table_name}")
+    #             return True
+    #         else:
+    #             logger.error(f"❌ Insert failed: {response.text}")
+    #             return False
+                
+    #     except Exception as e:
+    #         logger.error(f"💥 Insert error: {e}")
+    #         return False
+    
+    
+    
+    # def insert_data(self, 
+    #                 table_name: str,
+    #                 payload: Union[str, Dict[str, Any]]) -> bool:
+    #     """
+    #     Insert data using InfluxDB line protocol
+    #     Insert a single data point into QuestDB.
+    #     Args:
+    #         table_name: Name of the table to insert into
+    #         line_protocol: Data in InfluxDB line protocol format  
+    #         payload: Either InfluxDB line protocol (str) or a dict
+    #         where keys are column names and values are row values
+    #     Returns:
+    #         True if insert successful, False otherwise
+    #     """
+    #     # if isinstance(payload, dict):
+    #     #     return self._insert_row(table_name, payload)
+
+    #     try:
+    #         response = requests.post(
+    #             self.QUESTDB_WRITE_URL,
+    #             data=payload,
+    #             headers={'precision': "n"},
+    #             timeout=10
+    #         )
+            
+    #         if response.status_code in (200, 201, 204):
+    #             logger.debug(f"✅ Data inserted into {table_name}")
+    #             return True
+    #         else:
+    #             logger.error(f"❌ Insert failed: {response.text}")
+    #             return False
+                
+    #     except Exception as e:
+    #         logger.error(f"💥 Insert error: {e}")
+    #         return False
+    
+    def insert_row_sql(self, table_name: str, row_data: Dict[str, Any]) -> bool:
         """
-        Insert data using InfluxDB line protocol
-        Args:
-            table_name: Name of the table to insert into
-            line_protocol: Data in InfluxDB line protocol format  
-        Returns:
-            True if insert successful, False otherwise
+        Insert a single row using SQL INSERT (most reliable)
         """
         try:
-            response = requests.post(
-                self.QUESTDB_WRITE_URL,
-                data=line_protocol,
-                headers={'precision': "n"},
+            columns = []
+            values = []
+            
+            for col, val in row_data.items():
+                if val is None:
+                    continue  # Skip NULL values
+                
+                columns.append(col)
+                
+                if isinstance(val, (int, float)):
+                    values.append(str(val))
+                elif isinstance(val, str):
+                    # Escape single quotes
+                    escaped_val = val.replace("'", "''")
+                    values.append(f"'{escaped_val}'")
+                elif isinstance(val, datetime):
+                    values.append(f"'{val.isoformat()}'")
+                else:
+                    values.append(f"'{str(val)}'")
+            
+            if not columns:
+                logger.warning("No valid columns to insert")
+                return False
+            
+            query = f"""
+            INSERT INTO {table_name} ({', '.join(columns)})
+            VALUES ({', '.join(values)})
+            """
+            
+            logger.debug(f"SQL Query: {query}")
+            
+            response = requests.get(
+                self.QUESTDB_QUERY_URL,
+                params={"query": query},
                 timeout=10
             )
             
-            if response.status_code in (200, 201, 204):
-                logger.debug(f"✅ Data inserted into {table_name}")
+            if response.status_code == 200:
+                result = response.json()
+                if 'error' in result:
+                    logger.error(f"❌ QuestDB error: {result['error']}")
+                    return False
+                logger.debug(f"✅ SQL insert into {table_name}")
                 return True
             else:
-                logger.error(f"❌ Insert failed: {response.text}")
+                logger.error(f"❌ SQL insert failed: {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"💥 Insert error: {e}")
+            logger.error(f"💥 SQL insert error: {e}")
             return False
+    
+    # def _insert_row(self, 
+    #                 table_name: str, 
+    #                 row_data: Dict[str, Any]) -> bool:
+    #     """
+    #     Insert a single row using questdb.ingress Sender.row().
+    #     """
+    #     if Sender is None:
+    #         logger.error(
+    #             "❌ questdb.ingress is not installed. Install the 'questdb' package to use Sender.row()."
+    #         )
+    #         return False
+
+    #     symbols = {}
+    #     columns = {}
+    #     for key, value in row_data.items():
+    #         if value is None:
+    #             continue
+
+    #         if isinstance(value, bool):
+    #             columns[key] = value
+    #         elif isinstance(value, Number):
+    #             columns[key] = float(value)
+    #         else:
+    #             symbols[key] = str(value)
+
+    #     try:
+    #         sender_conf = os.getenv(
+    #             "QUESTDB_INGRESS_CONF",
+    #             f"http::addr={self.host}:{self.port};"
+    #         )
+    #         with Sender.from_conf(sender_conf) as sender:
+    #             sender.row(
+    #                 table_name,
+    #                 symbols=symbols or None,
+    #                 columns=columns,
+    #                 at=None,
+    #             )
+    #             sender.flush()
+    #         logger.debug(f"✅ Row inserted into {table_name} via Sender.row()")
+    #         return True
+    #     except Exception as e:
+    #         logger.error(f"💥 Sender.row insert error: {e}")
+    #         return False    
     
     def insert_batch(self, table_name: str, 
                     line_protocols: List[str]) -> Dict:

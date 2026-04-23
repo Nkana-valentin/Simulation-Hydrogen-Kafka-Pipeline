@@ -47,7 +47,7 @@ tsdb_schema:
     partition_by: DAY
 
   # Dimensions (labels / indexed metadata)
-  tags:  [lab, sensor_id, measurement_type, unit]
+  tags:  []
     # - name: tenant
     #   type: STRING
     #   required: false
@@ -77,7 +77,18 @@ tsdb_schema:
     #   required: false
 
   # Metrics (values stored per point)
-  fields: [value]
+  fields: [ "H2_001PT", "H2_002PT","H2_003PT", "H2_005PT",
+                "H2_001FT", "CA_001FC",
+                "H2_001TT", "H2_002TT", "H2_003TT":"H2_005TT",
+                "FC_STACK_V", "FC_STACK_i", 
+                "FC_STATE"]
+
+  prev_state: { "H2_001PT": 0.0, "H2_002PT": 0.0,"H2_003PT": 0.0, "H2_005PT": 0.0,
+                "H2_001FT":  0.0, "CA_001FC": 0.0,
+                "H2_001TT": 0.0, "H2_002TT": 0.0, "H2_003TT": 0.0,"H2_005TT": 0.0,
+                "FC_STACK_V":0.0, "FC_STACK_i": 0.0, 
+                "FC_STATE": 100.0}  
+
     # - name: value
     #   type: DOUBLE
     # required: true
