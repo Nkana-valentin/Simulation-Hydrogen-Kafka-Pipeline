@@ -59,7 +59,7 @@ services:
   kafka_producer:
     build:
       context: .
-      dockerfile: kafka_producer/Dockerfile
+      dockerfile: docker/Dockerfile.producer
     container_name: kafka_producer
     depends_on:
       broker:
@@ -79,7 +79,7 @@ services:
   kafka_consumer:
     build:
       context: .
-      dockerfile: kafka_consumer/Dockerfile
+      dockerfile: docker/Dockerfile.consumer
     container_name: kafka_consumer
     depends_on:
       broker:
@@ -96,7 +96,6 @@ services:
       - .env  
     volumes:
       - ./TSDB.yml:/app/TSDB.yml
-      - ./ingestion:/app/ingestion
     networks:
       - app_network
     restart: on-failure  
