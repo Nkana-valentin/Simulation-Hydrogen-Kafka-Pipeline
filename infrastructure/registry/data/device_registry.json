@@ -1,0 +1,11 @@
+{
+  "devices": [
+    {
+      "device_id": "simulation_device_01",
+      "device_secret_hash": "$2b$12$7fxEk83U/l.VYrVtbDBVY.mryWUusgiSMPv9nwcVQ0l0MxRU.XhVy",
+      "lab": "APSU",
+      "type": "simulator",
+      "permissions": ["ingest_data"]
+    }
+  ]
+}

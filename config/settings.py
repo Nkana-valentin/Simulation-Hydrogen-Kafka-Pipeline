@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # Producer → auth service
     auth_service_url: str = "http://fastapi_app:8000"
 
+    # Device identity (used by producer to authenticate against auth service)
+    device_id: str = "simulation_device_01"
+    device_secret: str = ""
+
     # TSDB schema config path
     tsdb_config_path: str = "TSDB.yml"
 

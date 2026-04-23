@@ -4,10 +4,11 @@ Orchestrates: Kafka consume → auth check → quality validate → QuestDB inse
 import logging
 import math
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
+from domain import auth as domain_auth
 from domain import quality as dq
 from infrastructure.kafka.consumer import KafkaConsumerClient
 from infrastructure.questdb.client import QuestDBClient
@@ -46,6 +47,8 @@ class IngestionService:
         table_name: str,
         schema: Dict[str, Any],
         validated_table: Optional[str] = None,
+        jwt_secret: str = "",
+        jwt_algorithm: str = "HS256",
     ) -> None:
         self._kafka = kafka
         self._db = questdb
@@ -59,6 +62,8 @@ class IngestionService:
         self._wqs_history: List[float] = []
         self._processed = 0
         self._last_good_values: Dict[str, float] = {}
+        self._jwt_secret = jwt_secret
+        self._jwt_algorithm = jwt_algorithm
 
     def setup(self) -> None:
         self._db.create_table(self._table, self._schema)
@@ -140,15 +145,22 @@ class IngestionService:
             if not math.isnan(value) and math.isfinite(value):
                 self._last_good_values[key] = value
 
-    @staticmethod
-    def _check_auth(data: Dict[str, Any]):
+    def _check_auth(self, data: Dict[str, Any]) -> Tuple[bool, str]:
         auth = data.get("auth", {})
         if not isinstance(auth, dict):
             return False, "missing_auth_section"
-        if not auth.get("authenticated", False):
-            return False, "not_authenticated_flag"
-        if not auth.get("device_id"):
-            return False, "missing_device_id"
+        token = auth.get("token")
+        if not token:
+            return False, "missing_token"
+        result = domain_auth.verify_token(token, self._jwt_secret, self._jwt_algorithm)
+        if not result["valid"]:
+            return False, result.get("reason", "invalid_token")
+        payload = result["payload"]
+        if "ingest_data" not in payload.get("permissions", []):
+            return False, "insufficient_permissions"
+        # Overwrite auth block with verified JWT claims (tamper-proof)
+        auth["device_id"] = payload.get("device_id", "")
+        auth["lab"] = payload.get("lab", "")
         return True, "ok"
 
     def _build_row(self, data: Dict[str, Any]) -> Dict[str, Any]:

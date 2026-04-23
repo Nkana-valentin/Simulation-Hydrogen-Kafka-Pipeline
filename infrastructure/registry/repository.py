@@ -59,14 +59,14 @@ class JsonFileResearcherRepository(ResearcherRepository):
         return list(self._researchers.values())
 
 
-_DEFAULT_REGISTRY = os.path.join(
-    os.path.dirname(__file__), "../../auth_service/device_registry.json"
-)
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+_DEFAULT_DEVICE_REGISTRY = os.path.join(_DATA_DIR, "device_registry.json")
+_DEFAULT_RESEARCHER_REGISTRY = os.path.join(_DATA_DIR, "researcher_registry.json")
 
 
 def default_device_repo() -> JsonFileDeviceRepository:
-    return JsonFileDeviceRepository(os.path.normpath(_DEFAULT_REGISTRY))
+    return JsonFileDeviceRepository(os.path.normpath(_DEFAULT_DEVICE_REGISTRY))
 
 
 def default_researcher_repo() -> JsonFileResearcherRepository:
-    return JsonFileResearcherRepository(os.path.normpath(_DEFAULT_REGISTRY))
+    return JsonFileResearcherRepository(os.path.normpath(_DEFAULT_RESEARCHER_REGISTRY))

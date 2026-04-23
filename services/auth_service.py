@@ -3,8 +3,17 @@ Token issuance — bridges domain/auth.py and the registry repositories.
 """
 from typing import Any, Dict, Optional
 
+import bcrypt
+
 from domain import auth as domain_auth
 from infrastructure.registry.repository import DeviceRepository, ResearcherRepository
+
+
+def _verify_hash(plaintext: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plaintext.encode(), hashed.encode())
+    except Exception:
+        return False
 
 
 class AuthService:
@@ -26,7 +35,9 @@ class AuthService:
 
     def login_device(self, device_id: str, device_secret: str) -> Optional[Dict[str, Any]]:
         device = self._devices.find_by_id(device_id)
-        if not device or device.get("device_secret") != device_secret:
+        if not device:
+            return None
+        if not _verify_hash(device_secret, device.get("device_secret_hash", "")):
             return None
 
         payload = {
@@ -50,7 +61,9 @@ class AuthService:
         self, institution: str, username: str, password: str
     ) -> Optional[Dict[str, Any]]:
         researcher = self._researchers.find(institution, username)
-        if not researcher or researcher.get("password") != password:
+        if not researcher:
+            return None
+        if not _verify_hash(password, researcher.get("password_hash", "")):
             return None
 
         payload = {

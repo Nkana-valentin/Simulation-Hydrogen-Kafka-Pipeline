@@ -31,6 +31,8 @@ def main() -> None:
         table_name=settings.kafka_topic_raw,
         validated_table=settings.kafka_topic_validated,
         schema=schema,
+        jwt_secret=settings.jwt_secret,
+        jwt_algorithm=settings.jwt_algorithm,
     )
     svc.setup()
     svc.run()
