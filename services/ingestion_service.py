@@ -53,6 +53,7 @@ class IngestionService:
         self._validated_table = validated_table
         self._schema = schema
         self._schema_fields: List[str] = schema.get("fields", [])
+        self._schema_tags: List[str] = schema.get("tags", [])
         self._stats = IngestionStats()
         self._field_history: Dict[str, List[float]] = {}
         self._wqs_history: List[float] = []
@@ -153,4 +154,9 @@ class IngestionService:
     def _build_row(self, data: Dict[str, Any]) -> Dict[str, Any]:
         row = {k: data[k] for k in self._schema_fields if k in data}
         row["timestamp"] = data.get("timestamp")
+        auth = data.get("auth", {})
+        if isinstance(auth, dict):
+            for tag in self._schema_tags:
+                if tag in auth:
+                    row[tag] = auth[tag]
         return row

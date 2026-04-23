@@ -47,7 +47,9 @@ tsdb_schema:
     partition_by: DAY
 
   # Dimensions (labels / indexed metadata)
-  tags:  []
+  tags:
+    - name: device_id
+      type: STRING
     # - name: tenant
     #   type: STRING
     #   required: false
