@@ -1,7 +1,7 @@
 """Consumer entry point — delegates to IngestionService."""
-import logging
 import time
 
+import structlog
 from prometheus_client import start_http_server
 
 from config.logging import configure_logging
@@ -12,7 +12,7 @@ from infrastructure.questdb.schema import load_schema
 from services.ingestion_service import IngestionService
 
 configure_logging()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def main() -> None:
@@ -20,9 +20,9 @@ def main() -> None:
     schema = load_schema(settings.tsdb_config_path)
 
     start_http_server(8001)
-    logger.info("Prometheus metrics available on :8001")
+    logger.info("prometheus_ready", port=8001)
 
-    logger.info("Waiting 15 s for Kafka to be ready...")
+    logger.info("waiting_for_kafka", seconds=15)
     time.sleep(15)
 
     kafka = KafkaConsumerClient(broker=settings.kafka_broker, topic=settings.kafka_topic_raw)

@@ -8,16 +8,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Kafka
     kafka_broker: str = "broker:9092"
-    kafka_bootstrap_servers: str = "broker:9092"
     kafka_topic_raw: str = "raw_h2_data"
     kafka_topic_validated: str = "validated_h2_data"
 
     # QuestDB
     questdb_host: str = "questdb"
     questdb_port: int = 9000
-    questdb_user: str = "admin"
-    questdb_password: str = "quest"
-    questdb_database: str = "qdb"
 
     # JWT — no default; must be set in environment
     jwt_secret: str
@@ -26,7 +22,7 @@ class Settings(BaseSettings):
 
     # Sync worker
     batch_size: int = 50
-    sync_interval: int = 30          # accepts "30" or "30s"
+    sync_interval: int = 30          # accepts plain int, "30s", or "2m"
     local_sync_dir: str = "./synced_data"
     remote_sync_enabled: bool = False
 

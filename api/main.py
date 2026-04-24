@@ -1,8 +1,8 @@
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import structlog
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
@@ -11,7 +11,7 @@ from config.logging import configure_logging
 from workers.auto_sync_worker import sync_worker
 
 configure_logging()
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _sync_task: Optional[asyncio.Task] = None
 
@@ -19,7 +19,7 @@ _sync_task: Optional[asyncio.Task] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _sync_task
-    logger.info("Starting up — launching background sync worker")
+    logger.info("startup")
     _sync_task = asyncio.create_task(sync_worker())
     yield
     if _sync_task:
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
             await _sync_task
         except asyncio.CancelledError:
             pass
-    logger.info("Shutdown complete")
+    logger.info("shutdown")
 
 
 app = FastAPI(

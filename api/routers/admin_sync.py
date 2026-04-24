@@ -1,5 +1,4 @@
 import glob
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
@@ -13,7 +12,6 @@ from infrastructure.ssh.transfer import SSHTransferClient
 from services.sync_service import SyncService
 from workers.auto_sync_worker import BATCH_SIZE, sync_new_data_batch, sync_to_remote
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auto Sync to Hydor"])
 
 _sync_metrics: Dict[str, Any] = {
