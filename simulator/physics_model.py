@@ -52,10 +52,14 @@ def generate_physical_state(
     else:
         flow = float(flow) * 0.9
 
-    P1 = float(prev.get("H2_001PT", 0)) + 0.05 * flow
-    P2 = float(prev.get("H2_002PT", 0)) + 0.04 * P1
-    P3 = float(prev.get("H2_003PT", 0)) + 0.03 * P2
-    P4 = min(float(prev.get("H2_005PT", 0)) + 0.1 * P3, 200.0)
+    def _safe(val: object, fallback: float = 0.0) -> float:
+        v = float(val)
+        return v if math.isfinite(v) else fallback
+
+    P1 = _safe(prev.get("H2_001PT")) + 0.05 * flow
+    P2 = _safe(prev.get("H2_002PT")) + 0.04 * P1
+    P3 = _safe(prev.get("H2_003PT")) + 0.03 * P2
+    P4 = min(_safe(prev.get("H2_005PT")) + 0.1 * P3, 200.0)
 
     base_temp = 13.0
     T1 = base_temp + math.sin(random.random()) + random.gauss(0, 0.1)

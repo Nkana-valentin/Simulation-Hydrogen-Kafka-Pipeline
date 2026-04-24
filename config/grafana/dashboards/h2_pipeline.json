@@ -13,22 +13,22 @@
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "rate(h2_ingestion_messages_total{result='received'}[1m])",
           "legendFormat": "received/s"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "rate(h2_ingestion_messages_total{result='valid'}[1m])",
           "legendFormat": "valid/s"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "rate(h2_ingestion_messages_total{result='invalid'}[1m])",
           "legendFormat": "invalid/s"
         },
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "rate(h2_ingestion_messages_total{result='auth_failed'}[1m])",
           "legendFormat": "auth_failed/s"
         }
@@ -47,7 +47,7 @@
       "gridPos": { "x": 12, "y": 0, "w": 6, "h": 8 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "h2_ingestion_quality_yield_ratio * 100",
           "legendFormat": "yield %"
         }
@@ -75,7 +75,7 @@
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 8 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "h2_sync_lag_seconds",
           "legendFormat": "lag"
         }
@@ -101,7 +101,7 @@
       "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "h2_ingestion_messages_total{result='received'}",
           "legendFormat": "received"
         }
@@ -115,7 +115,7 @@
       "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "h2_ingestion_messages_total{result='auth_failed'}",
           "legendFormat": "auth_failed"
         }
@@ -140,7 +140,7 @@
       "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "h2_sync_records_synced_total",
           "legendFormat": "synced"
         }
@@ -154,7 +154,7 @@
       "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "rate(h2_sync_batches_total[5m])",
           "legendFormat": "{{status}}"
         }

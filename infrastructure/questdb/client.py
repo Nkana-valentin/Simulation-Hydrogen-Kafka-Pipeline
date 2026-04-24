@@ -2,6 +2,7 @@
 QuestDB HTTP REST client.
 All DDL and DML go through /exec; batch line-protocol inserts go through /write.
 """
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -68,12 +69,16 @@ class QuestDBClient:
         for col, val in row.items():
             if val is None:
                 continue
-            cols.append(col)
             if isinstance(val, (int, float)):
+                if not math.isfinite(float(val)):
+                    continue
+                cols.append(col)
                 vals.append(str(val))
             elif isinstance(val, datetime):
+                cols.append(col)
                 vals.append(f"'{val.isoformat()}'")
             else:
+                cols.append(col)
                 vals.append(f"'{str(val).replace(chr(39), chr(39)*2)}'")
 
         if not cols:

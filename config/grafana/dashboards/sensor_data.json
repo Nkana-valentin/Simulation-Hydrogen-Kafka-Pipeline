@@ -2,7 +2,7 @@
   "title": "H2 Sensor Data",
   "uid": "h2-sensors",
   "schemaVersion": 38,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": { "from": "now-30m", "to": "now" },
   "templating": {
@@ -13,7 +13,7 @@
         "type": "custom",
         "current": { "text": "H2_001PT — Pressure 1", "value": "H2_001PT" },
         "options": [
-          { "text": "H2_001PT — Pressure 1",  "value": "H2_001PT",  "selected": true },
+          { "text": "H2_001PT — Pressure 1",  "value": "H2_001PT",  "selected": true  },
           { "text": "H2_002PT — Pressure 2",  "value": "H2_002PT",  "selected": false },
           { "text": "H2_003PT — Pressure 3",  "value": "H2_003PT",  "selected": false },
           { "text": "H2_005PT — Pressure 5",  "value": "H2_005PT",  "selected": false },
@@ -56,7 +56,8 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "questdb" },
-          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE $__timeFilter(timestamp) ORDER BY timestamp",
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -80,7 +81,8 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "questdb" },
-          "rawSql": "SELECT timestamp, $sensor FROM $table ORDER BY timestamp DESC LIMIT 1",
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table ORDER BY timestamp DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -96,7 +98,8 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "questdb" },
-          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE $__timeFilter(timestamp) ORDER BY timestamp",
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -115,6 +118,7 @@
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "table",
           "rawSql": "SELECT timestamp, H2_001PT, H2_002PT, H2_003PT, H2_005PT, H2_001FT, CA_001FC, H2_001TT, H2_002TT, H2_003TT, H2_005TT, FC_STACK_V, FC_STACK_i, FC_STATE FROM $table ORDER BY timestamp DESC LIMIT 5",
           "refId": "A"
         }
