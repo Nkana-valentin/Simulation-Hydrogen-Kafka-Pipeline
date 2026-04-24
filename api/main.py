@@ -5,9 +5,11 @@ from typing import Optional
 
 from fastapi import FastAPI
 
-from api.routers import auth, researcher_sync, admin_sync
+from api.routers import admin_sync, auth, researcher_sync
+from config.logging import configure_logging
 from workers.auto_sync_worker import sync_worker
 
+configure_logging()
 logger = logging.getLogger(__name__)
 
 _sync_task: Optional[asyncio.Task] = None

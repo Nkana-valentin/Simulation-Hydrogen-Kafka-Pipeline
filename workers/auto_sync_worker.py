@@ -3,10 +3,11 @@ Background asyncio worker — scheduling only, no business logic.
 All data decisions delegate to SyncService and SSHTransferClient.
 """
 import asyncio
-import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+import structlog
 
 from config.settings import get_settings
 from infrastructure.questdb.client import QuestDBClient
@@ -14,7 +15,7 @@ from infrastructure.questdb.schema import load_schema
 from infrastructure.ssh.transfer import SSHTransferClient
 from services.sync_service import SyncService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Module-level constants resolved at import time so the router can reference them.
 BATCH_SIZE: int = int(os.getenv("BATCH_SIZE", "50"))
@@ -48,7 +49,6 @@ async def sync_to_remote() -> Dict[str, Any]:
     if not settings.remote_sync_enabled:
         return {"status": "skipped", "message": "REMOTE_SYNC_ENABLED=false"}
 
-    svc = _get_service()
     sync_dirs = sorted(Path(settings.local_sync_dir).glob("sync_*"))
     if not sync_dirs:
         return {"status": "skipped", "message": "No sync directories"}

@@ -1,10 +1,8 @@
 """
 SyncService unit tests — no real QuestDB or filesystem writes.
 """
-import json
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from services.sync_service import SyncService
 

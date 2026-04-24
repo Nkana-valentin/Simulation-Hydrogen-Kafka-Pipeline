@@ -2,11 +2,10 @@ from datetime import datetime
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from api.dependencies import _auth_service
 from services.auth_service import AuthService
-
-from pydantic import BaseModel, Field
 
 
 class DeviceLogin(BaseModel):

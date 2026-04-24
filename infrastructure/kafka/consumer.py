@@ -1,11 +1,11 @@
 import json
-import logging
 import time
 from typing import Any, Dict, Iterable, Optional
 
+import structlog
 from kafka import KafkaConsumer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class KafkaConsumerClient:
@@ -18,9 +18,7 @@ class KafkaConsumerClient:
     def connect(self, max_retries: int = 30, retry_delay: int = 5) -> None:
         for attempt in range(max_retries):
             try:
-                logger.info(
-                    "Connecting to Kafka at %s (attempt %d/%d)", self.broker, attempt + 1, max_retries
-                )
+                logger.info("kafka_connecting", broker=self.broker, attempt=attempt + 1, max_retries=max_retries)
                 self._consumer = KafkaConsumer(
                     self.topic,
                     bootstrap_servers=[self.broker],
@@ -36,10 +34,10 @@ class KafkaConsumerClient:
                     api_version_auto_timeout_ms=30_000,
                 )
                 partitions = self._consumer.partitions_for_topic(self.topic) or set()
-                logger.info("Connected. Topic '%s' has %d partitions", self.topic, len(partitions))
+                logger.info("kafka_connected", topic=self.topic, partitions=len(partitions))
                 return
             except Exception as exc:
-                logger.warning("Connection failed: %s", exc)
+                logger.warning("kafka_connect_error", error=str(exc))
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
         raise RuntimeError(f"Could not connect to Kafka at {self.broker}")

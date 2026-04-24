@@ -15,7 +15,7 @@ _LHV = 120e6        # J/kg  (lower heating value)
 
 def initial_state() -> Dict[str, object]:
     return {
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+        "timestamp": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
         "FC_STATE": 100.0,
         "H2_001FT": 0.0,
         "H2_001PT": 0.0,
@@ -70,7 +70,7 @@ def generate_physical_state(
         return val + random.gauss(0, 0.02)
 
     state: Dict[str, object] = {
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+        "timestamp": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
         "FC_STATE": FC_STATE,
         "H2_001FT": noisy(flow),
         "H2_001PT": noisy(P1),

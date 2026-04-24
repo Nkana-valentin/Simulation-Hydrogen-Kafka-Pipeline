@@ -1,9 +1,7 @@
-import pytest
-import jwt as pyjwt
 
-from domain.auth import create_token, verify_token, verify_researcher_token
+from domain.auth import create_token, verify_researcher_token, verify_token
 
-SECRET = "test-secret-do-not-use-in-prod"
+SECRET = "test-secret-do-not-use-in-prod-ok"  # 34 bytes — above HS256 minimum
 ALGO = "HS256"
 
 
@@ -38,7 +36,7 @@ def test_expired_token_fails():
 
 def test_wrong_secret_fails():
     token = create_token(_device_payload(), SECRET, ALGO)
-    result = verify_token(token, "wrong-secret", ALGO)
+    result = verify_token(token, "wrong-secret-intentionally-bad-xyz", ALGO)
     assert not result["valid"]
     assert result["reason"] == "Invalid token"
 

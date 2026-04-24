@@ -1,19 +1,16 @@
 """Producer entry point — authenticates as a device then streams telemetry."""
 import logging
 import time
-from typing import Optional
 
 import jwt
 import requests
 
+from config.logging import configure_logging
 from config.settings import get_settings
 from infrastructure.kafka.producer import KafkaProducerClient
 from simulator.physics_model import generate_physical_state, initial_state
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 _TOKEN_REFRESH_BUFFER_SECS = 300  # refresh 5 min before expiry

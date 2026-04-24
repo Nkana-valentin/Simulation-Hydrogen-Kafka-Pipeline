@@ -1,12 +1,12 @@
 import json
-import logging
 import time
 from typing import Any, Dict, Optional
 
+import structlog
 from kafka import KafkaAdminClient, KafkaProducer
 from kafka.admin import NewTopic
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class KafkaProducerClient:
@@ -19,7 +19,7 @@ class KafkaProducerClient:
         self._ensure_topic()
         for attempt in range(max_retries):
             try:
-                logger.info("Connecting to Kafka at %s (attempt %d/%d)", self.broker, attempt + 1, max_retries)
+                logger.info("kafka_connecting", broker=self.broker, attempt=attempt + 1, max_retries=max_retries)
                 self._producer = KafkaProducer(
                     bootstrap_servers=[self.broker],
                     value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -30,10 +30,10 @@ class KafkaProducerClient:
                 )
                 time.sleep(2)
                 partitions = self._producer.partitions_for(self.topic) or set()
-                logger.info("Connected. Topic '%s' has %d partitions", self.topic, len(partitions))
+                logger.info("kafka_connected", topic=self.topic, partitions=len(partitions))
                 return
             except Exception as exc:
-                logger.warning("Connection error: %s", exc)
+                logger.warning("kafka_connect_error", error=str(exc))
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
         raise RuntimeError(f"Could not connect to Kafka at {self.broker}")
@@ -56,7 +56,7 @@ class KafkaProducerClient:
             existing = admin.list_topics()
             if self.topic not in existing:
                 admin.create_topics([NewTopic(name=self.topic, num_partitions=3, replication_factor=1)])
-                logger.info("Created topic '%s'", self.topic)
+                logger.info("kafka_topic_created", topic=self.topic)
             admin.close()
         except Exception as exc:
-            logger.warning("Could not verify/create topic: %s", exc)
+            logger.warning("kafka_topic_check_failed", error=str(exc))

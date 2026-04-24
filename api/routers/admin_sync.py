@@ -2,16 +2,16 @@ import glob
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.dependencies import _sync_service, get_admin_user
 from config.settings import Settings, get_settings
 from infrastructure.ssh.transfer import SSHTransferClient
 from services.sync_service import SyncService
-from workers.auto_sync_worker import sync_new_data_batch, sync_to_remote, BATCH_SIZE
+from workers.auto_sync_worker import BATCH_SIZE, sync_new_data_batch, sync_to_remote
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auto Sync to Hydor"])

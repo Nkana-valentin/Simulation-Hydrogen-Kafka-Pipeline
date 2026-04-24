@@ -1,6 +1,4 @@
-import math
-import pytest
-from domain.quality import validate_record, content_completeness, timeliness_score, ValidationResult
+from domain.quality import content_completeness, timeliness_score, validate_record
 
 
 def _record(**kwargs):
@@ -50,7 +48,7 @@ def test_content_completeness_partial():
 
 def test_timeliness_recent():
     import datetime as dt
-    ts = (dt.datetime.utcnow()).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     score = timeliness_score(ts)
     assert score > 0.9
 

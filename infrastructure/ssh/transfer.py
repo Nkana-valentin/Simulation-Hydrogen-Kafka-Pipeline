@@ -1,16 +1,16 @@
 """
 SFTP transfer client — only SSH/file-transfer logic lives here.
 """
-import logging
 import os
 import socket
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import paramiko
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SSHTransferClient:
@@ -90,11 +90,11 @@ class SSHTransferClient:
                     sftp.put(str(file), dest)
                     if file.stat().st_size == sftp.stat(dest).st_size:
                         transferred += 1
-                        logger.info("Uploaded %s", file.name)
+                        logger.info("sftp_uploaded", file=file.name, dest=dest)
                     else:
-                        logger.error("Integrity check failed for %s", file.name)
+                        logger.error("sftp_integrity_failed", file=file.name)
                 except Exception as exc:
-                    logger.error("Failed to upload %s: %s", file.name, exc)
+                    logger.error("sftp_upload_failed", file=file.name, error=str(exc))
             sftp.close()
         finally:
             ssh.close()
@@ -129,7 +129,7 @@ class SSHTransferClient:
                 ssh.connect(**kwargs)
                 return
             except Exception as exc:
-                logger.warning("SSH attempt %d/%d failed: %s", i + 1, attempts, exc)
+                logger.warning("ssh_connect_failed", attempt=i + 1, max_attempts=attempts, error=str(exc))
                 if i < attempts - 1:
                     time.sleep(3)
         raise RuntimeError(f"SSH connection to {self.host} failed after {attempts} attempts")

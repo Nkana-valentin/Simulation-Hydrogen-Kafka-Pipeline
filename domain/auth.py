@@ -45,8 +45,8 @@ def verify_token(token: str, secret: str, algorithm: str = "HS256") -> Dict[str,
 
 
 def verify_researcher_token(
-    token: str, 
-    secret: str, 
+    token: str,
+    secret: str,
     algorithm: str = "HS256") -> Dict[str, Any]:
     result = verify_token(token, secret, algorithm)
     if result["valid"] and result["payload"].get("identity_type") != "researcher":

@@ -2,11 +2,11 @@
 Pure domain quality rules.  No I/O, no framework imports.
 Implements the quality dimensions from Peixoto et al. (2025).
 """
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-import math
 import numpy as np
 
 

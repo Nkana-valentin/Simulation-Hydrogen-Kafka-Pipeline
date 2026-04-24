@@ -4,15 +4,16 @@ Handles both researcher-scoped sync and system-wide auto-sync.
 """
 import csv
 import json
-import logging
 import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import structlog
+
 from infrastructure.questdb.client import QuestDBClient
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SyncService:
@@ -207,7 +208,7 @@ class SyncService:
                 }
             return state
         except Exception as exc:
-            logger.error("Error reading state for %s: %s", researcher_id, exc)
+            logger.error("researcher_state_read_failed", researcher_id=researcher_id, error=str(exc))
             return {"researcher_id": researcher_id, "data_types": {}}
 
     def _update_researcher_state(

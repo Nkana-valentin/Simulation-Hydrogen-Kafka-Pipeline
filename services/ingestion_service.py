@@ -1,9 +1,12 @@
 """
 Orchestrates: Kafka consume → auth check → quality validate → QuestDB insert.
+Failed records (auth or validation) are routed to a dead-letter table instead
+of being silently discarded.
 """
-import logging
+import json
 import math
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
@@ -17,6 +20,18 @@ logger = structlog.get_logger(__name__)
 
 _STATS_EVERY_N = 100
 _STATS_EVERY_SECS = 30
+
+_DEAD_LETTER_SCHEMA = {
+    "tags": ["failure_category", "failure_reason", "device_id", "raw_payload"],
+    "fields": [],
+    "tag_types": {
+        "failure_category": "STRING",
+        "failure_reason": "STRING",
+        "device_id": "STRING",
+        "raw_payload": "STRING",
+    },
+    "field_types": {},
+}
 
 
 class IngestionStats:
@@ -53,6 +68,7 @@ class IngestionService:
         self._kafka = kafka
         self._db = questdb
         self._table = table_name
+        self._dead_letter_table = f"{table_name}_dead_letter"
         self._validated_table = validated_table
         self._schema = schema
         self._schema_fields: List[str] = schema.get("fields", [])
@@ -67,6 +83,8 @@ class IngestionService:
 
     def setup(self) -> None:
         self._db.create_table(self._table, self._schema)
+        self._db.create_table(self._dead_letter_table, _DEAD_LETTER_SCHEMA)
+        logger.info("dead_letter_table_ready", table=self._dead_letter_table)
         if self._validated_table:
             self._db.create_table(self._validated_table, self._schema)
             logger.info("validated_table_ready", table=self._validated_table)
@@ -101,6 +119,7 @@ class IngestionService:
         if not auth_ok:
             self._stats.auth_failed += 1
             logger.warning("auth_failed", reason=auth_reason)
+            self._write_dead_letter(data, "auth", auth_reason)
             return
 
         # Always store the raw record unchanged
@@ -129,14 +148,46 @@ class IngestionService:
                     logger.error("validated_insert_failed", row_keys=list(clean_row.keys()))
             else:
                 self._stats.invalid += 1
+                reason = "; ".join(result.errors)
                 logger.warning("dropped_after_clean", errors=result.errors)
+                self._write_dead_letter(data, "validation", reason)
         else:
             result = dq.validate_record(data)
             if result.is_valid:
                 self._stats.valid += 1
             else:
                 self._stats.invalid += 1
+                reason = "; ".join(result.errors)
                 logger.warning("validation_failed", errors=result.errors)
+                self._write_dead_letter(data, "validation", reason)
+
+    def _write_dead_letter(
+        self, data: Dict[str, Any], category: str, reason: str
+    ) -> None:
+        # Strip JWT token before storing — never persist credentials
+        sanitized = {k: v for k, v in data.items() if k != "auth"}
+        auth = data.get("auth", {})
+        if isinstance(auth, dict):
+            sanitized["auth"] = {k: v for k, v in auth.items() if k != "token"}
+
+        try:
+            raw_payload = json.dumps(sanitized, default=str)
+        except Exception:
+            raw_payload = "{}"
+
+        device_id = ""
+        if isinstance(auth, dict):
+            device_id = str(auth.get("device_id", ""))
+
+        row = {
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
+            "failure_category": category,
+            "failure_reason": reason[:500],  # guard against runaway error strings
+            "device_id": device_id,
+            "raw_payload": raw_payload[:4000],  # QuestDB STRING practical limit
+        }
+        if not self._db.insert_row(self._dead_letter_table, row):
+            logger.error("dead_letter_insert_failed", category=category, reason=reason)
 
     def _update_last_good(self, data: Dict[str, Any]) -> None:
         for key, value in data.items():

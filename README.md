@@ -29,17 +29,50 @@ This repository models a **Physical Twin → Digital Twin** workflow:
 
 ```text
 .
-├── main.py                          # FastAPI app entrypoint
 ├── docker-compose.yml               # Full stack orchestration
-├── kafka_producer/
-│   └── kafka_producer_service.py    # Telemetry producer
-├── kafka_consumer/
-│   └── kafka_consumer_to_tsdb.py    # Consumer + quality checks + QuestDB writes
-├── ingestion/                       # Generator, transforms, TSDB utilities
-├── routers/                         # API routes (auth, researcher sync, auto-sync)
-├── synchronization/                 # Background sync workers/helpers
-├── auth_service/                    # JWT + registry models/config
-├── test/                            # Shell test scripts
+├── Dockerfile                       # FastAPI app image
+├── docker/
+│   ├── Dockerfile.producer          # Producer image
+│   └── Dockerfile.consumer          # Consumer image
+├── TSDB.yml                         # Table schema — single source of truth
+│
+├── config/
+│   └── settings.py                  # Pydantic Settings — all env vars
+├── domain/
+│   ├── telemetry.py                 # TelemetryRecord, AuthBlock models
+│   ├── quality.py                   # Pure validation / quality functions
+│   └── auth.py                      # Pure JWT functions
+├── infrastructure/
+│   ├── kafka/{producer,consumer}.py
+│   ├── questdb/{client,schema}.py
+│   ├── ssh/transfer.py
+│   └── registry/
+│       ├── repository.py            # Abstract + JsonFile registry implementations
+│       └── data/
+│           ├── device_registry.json
+│           └── researcher_registry.json
+├── services/
+│   ├── auth_service.py              # Token issuance via registry
+│   ├── ingestion_service.py         # consume → validate → store
+│   └── sync_service.py              # query → paginate → save → state
+├── api/
+│   ├── main.py                      # FastAPI app + lifespan
+│   ├── dependencies.py              # FastAPI Depends wiring
+│   └── routers/
+│       ├── auth.py
+│       ├── researcher_sync.py
+│       └── admin_sync.py
+├── workers/
+│   └── auto_sync_worker.py          # asyncio background sync task
+├── simulator/
+│   └── physics_model.py             # generate_physical_state() — no external deps
+├── cmd/
+│   ├── producer.py                  # Producer entry point
+│   └── consumer.py                  # Consumer entry point
+├── scripts/
+│   └── hash_credentials.py          # bcrypt credential hashing utility
+├── tests/
+│   └── unit/                        # pytest — no Docker needed
 └── diagnostic.sh                    # Runtime diagnostics
 ```
 
@@ -110,9 +143,9 @@ docker compose up -d --build
 ### 5) Follow logs
 
 ```bash
-docker logs -f kafka_producer
-docker logs -f kafka_consumer
-docker logs -f fastapi_app
+docker logs -f kafka_producer   # telemetry producer
+docker logs -f kafka_consumer   # ingestion + quality checks
+docker logs -f fastapi_app      # API + sync worker
 ```
 
 ## Local run (without Compose, optional)
@@ -125,12 +158,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Then start your dependencies (Kafka + QuestDB), and run:
+Then start your dependencies (Kafka + QuestDB), and run each in a separate terminal:
 
 ```bash
-uvicorn main:app --reload
-python3 kafka_producer/kafka_producer_service.py
-python3 kafka_consumer/kafka_consumer_to_tsdb.py
+uvicorn api.main:app --reload
+python3 -m cmd.producer
+python3 -m cmd.consumer
 ```
 
 ## API overview
@@ -162,6 +195,62 @@ python3 kafka_consumer/kafka_consumer_to_tsdb.py
 3. **QuestDB** stores records in a topic-named table (default: `raw_h2_data`).
 4. **Sync services** paginate/query QuestDB and export data to filesystem/remote target.
 
+### Example Kafka message
+
+The producer (`cmd/producer.py`) builds this message from `simulator/physics_model.py` and injects the device JWT before publishing:
+
+```json
+{
+  "timestamp": "2026-04-23T14:22:01.123456Z",
+  "FC_STATE":   100.0,
+  "H2_001FT":   2.34,
+  "H2_001PT":   0.12,
+  "H2_002PT":   0.10,
+  "H2_003PT":   0.09,
+  "H2_005PT":   1.87,
+  "CA_001FC":   0.03,
+  "H2_001TT":   13.84,
+  "H2_002TT":   12.51,
+  "H2_003TT":   12.00,
+  "H2_005TT":   11.48,
+  "FC_STACK_V": 1.78,
+  "FC_STACK_i": 8.51,
+  "auth": {
+    "token":     "<device JWT>",
+    "device_id": "simulation_device_01"
+  }
+}
+```
+
+The consumer (`cmd/consumer.py`) verifies the JWT and overwrites the `auth` block with the claims extracted from the token (device_id, lab). Only the fields listed in `TSDB.yml` are written to QuestDB — the `auth` block is never stored.
+
+## Automatic sync
+
+The background sync worker (`workers/auto_sync_worker.py`) starts automatically with the FastAPI app (wired in `api/main.py` via the lifespan hook). It runs on a configurable interval and saves batches locally. Remote SSH transfer to the ORFEO-Hydor platform is optional.
+
+**Relevant `.env` variables:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SYNC_INTERVAL` | `30` | Poll interval in seconds (also accepts `30s`, `2m`) |
+| `BATCH_SIZE` | `50` | Minimum new records before a batch is written |
+| `LOCAL_SYNC_DIR` | `./synced_data` | Local output directory for sync batches |
+| `REMOTE_SYNC_ENABLED` | `false` | Set to `true` to also push batches over SSH |
+| `SSH_HOST` | — | Required when `REMOTE_SYNC_ENABLED=true` |
+| `SSH_USER` | — | SSH username |
+| `SSH_KEY_PATH` | — | Path to private key inside the container |
+| `SSH_REMOTE_PATH` | `/tmp` | Destination path on the remote host |
+
+To enable remote sync, set `REMOTE_SYNC_ENABLED=true` and fill in the `SSH_*` variables in your `.env` before starting the stack. The worker will then upload each completed local batch to the remote target after saving it locally.
+
+## Testing
+
+Unit tests require no external services (no Kafka, QuestDB, or Docker):
+
+```bash
+JWT_SECRET=any-dev-secret python -m pytest tests/unit/ -v
+```
+
 ## Useful scripts
 
 - Full diagnostics:
@@ -180,6 +269,12 @@ python3 kafka_consumer/kafka_consumer_to_tsdb.py
 
   ```bash
   bash test/test_access_control.sh
+  ```
+
+- Rehash credentials (bcrypt):
+
+  ```bash
+  python3 scripts/hash_credentials.py
   ```
 
 ## Troubleshooting

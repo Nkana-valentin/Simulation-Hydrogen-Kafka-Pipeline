@@ -2,16 +2,14 @@
 import logging
 import time
 
+from config.logging import configure_logging
 from config.settings import get_settings
 from infrastructure.kafka.consumer import KafkaConsumerClient
 from infrastructure.questdb.client import QuestDBClient
 from infrastructure.questdb.schema import load_schema
 from services.ingestion_service import IngestionService
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

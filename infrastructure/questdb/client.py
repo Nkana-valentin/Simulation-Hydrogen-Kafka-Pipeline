@@ -2,13 +2,13 @@
 QuestDB HTTP REST client.
 All DDL and DML go through /exec; batch line-protocol inserts go through /write.
 """
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class QuestDBClient:
@@ -28,7 +28,7 @@ class QuestDBClient:
 
     def create_table(self, table_name: str, schema: Dict[str, Any]) -> bool:
         if self.table_exists(table_name):
-            logger.info("Table %s already exists", table_name)
+            logger.info("questdb_table_exists", table=table_name)
             return True
 
         tag_types = schema.get("tag_types", {})
@@ -47,7 +47,7 @@ class QuestDBClient:
         result = self._exec(ddl)
         ok = result is not None and "error" not in result
         if ok:
-            logger.info("Created table %s", table_name)
+            logger.info("questdb_table_created", table=table_name)
         return ok
 
     def drop_table(self, table_name: str, *, confirm: bool = False) -> bool:
@@ -134,10 +134,10 @@ class QuestDBClient:
             if resp.status_code == 200:
                 data = resp.json()
                 if "error" in data:
-                    logger.error("QuestDB error: %s | sql: %s", data["error"], sql[:200])
+                    logger.error("questdb_exec_error", error=data["error"], sql=sql[:200])
                 return data
-            logger.error("HTTP %s from QuestDB: %s", resp.status_code, resp.text[:200])
+            logger.error("questdb_http_error", status=resp.status_code, body=resp.text[:200])
             return None
         except Exception as exc:
-            logger.error("QuestDB request failed: %s", exc)
+            logger.error("questdb_request_failed", error=str(exc))
             return None
