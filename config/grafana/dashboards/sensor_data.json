@@ -52,11 +52,11 @@
       "title": "$sensor over time ($table)",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
-      "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+      "datasource": { "type": "postgres", "uid": "questdb" },
       "targets": [
         {
-          "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
-          "rawSql": "SELECT timestamp, $sensor FROM $table WHERE timestamp >= '${__from:date:iso}' AND timestamp < '${__to:date:iso}' ORDER BY timestamp",
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE $__timeFilter(timestamp) ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -76,10 +76,10 @@
       "title": "Current value",
       "type": "stat",
       "gridPos": { "x": 0, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+      "datasource": { "type": "postgres", "uid": "questdb" },
       "targets": [
         {
-          "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+          "datasource": { "type": "postgres", "uid": "questdb" },
           "rawSql": "SELECT timestamp, $sensor FROM $table ORDER BY timestamp DESC LIMIT 1",
           "refId": "A"
         }
@@ -92,11 +92,11 @@
       "title": "Min / Max (selected range)",
       "type": "stat",
       "gridPos": { "x": 6, "y": 10, "w": 6, "h": 4 },
-      "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+      "datasource": { "type": "postgres", "uid": "questdb" },
       "targets": [
         {
-          "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
-          "rawSql": "SELECT timestamp, $sensor FROM $table WHERE timestamp >= '${__from:date:iso}' AND timestamp < '${__to:date:iso}' ORDER BY timestamp",
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "rawSql": "SELECT timestamp AS time, $sensor AS value FROM $table WHERE $__timeFilter(timestamp) ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -111,10 +111,10 @@
       "title": "All sensors — latest 5 rows",
       "type": "table",
       "gridPos": { "x": 12, "y": 10, "w": 12, "h": 4 },
-      "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+      "datasource": { "type": "postgres", "uid": "questdb" },
       "targets": [
         {
-          "datasource": { "type": "questdb-questdb-datasource", "uid": "questdb" },
+          "datasource": { "type": "postgres", "uid": "questdb" },
           "rawSql": "SELECT timestamp, H2_001PT, H2_002PT, H2_003PT, H2_005PT, H2_001FT, CA_001FC, H2_001TT, H2_002TT, H2_003TT, H2_005TT, FC_STACK_V, FC_STACK_i, FC_STATE FROM $table ORDER BY timestamp DESC LIMIT 5",
           "refId": "A"
         }
