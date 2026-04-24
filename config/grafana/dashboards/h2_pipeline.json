@@ -1,0 +1,170 @@
+{
+  "title": "H2 Pipeline — Live Telemetry",
+  "uid": "h2-pipeline",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Ingest Rate (msg/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(h2_ingestion_messages_total{result='received'}[1m])",
+          "legendFormat": "received/s"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(h2_ingestion_messages_total{result='valid'}[1m])",
+          "legendFormat": "valid/s"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(h2_ingestion_messages_total{result='invalid'}[1m])",
+          "legendFormat": "invalid/s"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(h2_ingestion_messages_total{result='auth_failed'}[1m])",
+          "legendFormat": "auth_failed/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Data Quality Yield",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "h2_ingestion_quality_yield_ratio * 100",
+          "legendFormat": "yield %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": 0   },
+              { "color": "yellow", "value": 80  },
+              { "color": "green",  "value": 95  }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Sync Lag (s)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "h2_sync_lag_seconds",
+          "legendFormat": "lag"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": 0    },
+              { "color": "yellow", "value": 60   },
+              { "color": "red",    "value": 300  }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Total Messages (cumulative)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "h2_ingestion_messages_total{result='received'}",
+          "legendFormat": "received"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 5,
+      "title": "Auth Failures (cumulative)",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "h2_ingestion_messages_total{result='auth_failed'}",
+          "legendFormat": "auth_failed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red",   "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Records Synced (cumulative)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "h2_sync_records_synced_total",
+          "legendFormat": "synced"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 7,
+      "title": "Sync Batch Outcomes",
+      "type": "timeseries",
+      "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(h2_sync_batches_total[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: fastapi
+    static_configs:
+      - targets: ["fastapi_app:8000"]
+        labels:
+          service: fastapi
+
+  - job_name: consumer
+    static_configs:
+      - targets: ["kafka_consumer:8001"]
+        labels:
+          service: consumer
