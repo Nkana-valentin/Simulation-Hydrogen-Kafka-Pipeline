@@ -153,11 +153,14 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - QUESTDB_USER=${QUESTDB_USER}
+      - QUESTDB_PASSWORD=${QUESTDB_PASSWORD}
     volumes:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - questdb
     networks:
       - app_network
     restart: on-failure
