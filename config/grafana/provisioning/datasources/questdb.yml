@@ -2,13 +2,9 @@ apiVersion: 1
 
 datasources:
   - name: QuestDB
-    type: postgres
-    url: custom_questdb:8812
-    user: ${QUESTDB_USER}
-    secureJsonData:
-      password: ${QUESTDB_PASSWORD}
+    type: questdb-questdb-datasource
     jsonData:
-      database: qdb
-      sslmode: disable
-      timescaledb: false
+      host: custom_questdb
+      port: 9000
+      tlsSkipVerify: true
     editable: false

@@ -2,7 +2,7 @@
   "title": "H2 Sensor Data",
   "uid": "h2-sensors",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": { "from": "now-30m", "to": "now" },
   "templating": {
@@ -11,21 +11,21 @@
         "name": "sensor",
         "label": "Sensor",
         "type": "custom",
-        "current": { "text": "H2_001PT", "value": "H2_001PT" },
+        "current": { "text": "H2_001PT — Pressure 1", "value": "H2_001PT" },
         "options": [
-          { "text": "H2_001PT — Pressure 1",   "value": "H2_001PT" },
-          { "text": "H2_002PT — Pressure 2",   "value": "H2_002PT" },
-          { "text": "H2_003PT — Pressure 3",   "value": "H2_003PT" },
-          { "text": "H2_005PT — Pressure 5",   "value": "H2_005PT" },
-          { "text": "H2_001FT — Flow 1",       "value": "H2_001FT" },
-          { "text": "CA_001FC — Flow ctrl",    "value": "CA_001FC" },
-          { "text": "H2_001TT — Temp 1",       "value": "H2_001TT" },
-          { "text": "H2_002TT — Temp 2",       "value": "H2_002TT" },
-          { "text": "H2_003TT — Temp 3",       "value": "H2_003TT" },
-          { "text": "H2_005TT — Temp 5",       "value": "H2_005TT" },
-          { "text": "FC_STACK_V — Stack V",    "value": "FC_STACK_V" },
-          { "text": "FC_STACK_i — Stack I",    "value": "FC_STACK_i" },
-          { "text": "FC_STATE — FC State",     "value": "FC_STATE" }
+          { "text": "H2_001PT — Pressure 1",  "value": "H2_001PT",  "selected": true },
+          { "text": "H2_002PT — Pressure 2",  "value": "H2_002PT",  "selected": false },
+          { "text": "H2_003PT — Pressure 3",  "value": "H2_003PT",  "selected": false },
+          { "text": "H2_005PT — Pressure 5",  "value": "H2_005PT",  "selected": false },
+          { "text": "H2_001FT — Flow 1",      "value": "H2_001FT",  "selected": false },
+          { "text": "CA_001FC — Flow ctrl",   "value": "CA_001FC",  "selected": false },
+          { "text": "H2_001TT — Temp 1",      "value": "H2_001TT",  "selected": false },
+          { "text": "H2_002TT — Temp 2",      "value": "H2_002TT",  "selected": false },
+          { "text": "H2_003TT — Temp 3",      "value": "H2_003TT",  "selected": false },
+          { "text": "H2_005TT — Temp 5",      "value": "H2_005TT",  "selected": false },
+          { "text": "FC_STACK_V — Stack V",   "value": "FC_STACK_V", "selected": false },
+          { "text": "FC_STACK_i — Stack I",   "value": "FC_STACK_i", "selected": false },
+          { "text": "FC_STATE — FC State",    "value": "FC_STATE",  "selected": false }
         ],
         "multi": false,
         "includeAll": false,
@@ -35,10 +35,10 @@
         "name": "table",
         "label": "Table",
         "type": "custom",
-        "current": { "text": "raw_h2_data", "value": "raw_h2_data" },
+        "current": { "text": "raw_h2_data", "value": "raw_h2_data", "selected": true },
         "options": [
-          { "text": "raw_h2_data",       "value": "raw_h2_data" },
-          { "text": "validated_h2_data", "value": "validated_h2_data" }
+          { "text": "raw_h2_data",       "value": "raw_h2_data",       "selected": true  },
+          { "text": "validated_h2_data", "value": "validated_h2_data", "selected": false }
         ],
         "multi": false,
         "includeAll": false,
@@ -52,12 +52,11 @@
       "title": "$sensor over time ($table)",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 10 },
-      "datasource": "QuestDB",
+      "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
       "targets": [
         {
-          "datasource": "QuestDB",
-          "rawSql": "SELECT timestamp AS time, \"$sensor\" AS value FROM $table WHERE timestamp >= $__timeFrom() AND timestamp < $__timeTo() ORDER BY timestamp",
-          "format": "time_series",
+          "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
+          "rawSql": "SELECT timestamp, $sensor FROM $table WHERE timestamp >= '${__from:date:iso}' AND timestamp < '${__to:date:iso}' ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -77,12 +76,11 @@
       "title": "Current value",
       "type": "stat",
       "gridPos": { "x": 0, "y": 10, "w": 6, "h": 4 },
-      "datasource": "QuestDB",
+      "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
       "targets": [
         {
-          "datasource": "QuestDB",
-          "rawSql": "SELECT timestamp AS time, \"$sensor\" AS value FROM $table ORDER BY timestamp DESC LIMIT 1",
-          "format": "time_series",
+          "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
+          "rawSql": "SELECT timestamp, $sensor FROM $table ORDER BY timestamp DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -94,12 +92,11 @@
       "title": "Min / Max (selected range)",
       "type": "stat",
       "gridPos": { "x": 6, "y": 10, "w": 6, "h": 4 },
-      "datasource": "QuestDB",
+      "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
       "targets": [
         {
-          "datasource": "QuestDB",
-          "rawSql": "SELECT timestamp AS time, \"$sensor\" AS value FROM $table WHERE timestamp >= $__timeFrom() AND timestamp < $__timeTo() ORDER BY timestamp",
-          "format": "time_series",
+          "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
+          "rawSql": "SELECT timestamp, $sensor FROM $table WHERE timestamp >= '${__from:date:iso}' AND timestamp < '${__to:date:iso}' ORDER BY timestamp",
           "refId": "A"
         }
       ],
@@ -111,15 +108,14 @@
     },
     {
       "id": 4,
-      "title": "All sensors — latest snapshot",
+      "title": "All sensors — latest 5 rows",
       "type": "table",
       "gridPos": { "x": 12, "y": 10, "w": 12, "h": 4 },
-      "datasource": "QuestDB",
+      "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
       "targets": [
         {
-          "datasource": "QuestDB",
-          "rawSql": "SELECT timestamp, \"H2_001PT\", \"H2_002PT\", \"H2_003PT\", \"H2_005PT\", \"H2_001FT\", \"CA_001FC\", \"H2_001TT\", \"H2_002TT\", \"H2_003TT\", \"H2_005TT\", \"FC_STACK_V\", \"FC_STACK_i\", \"FC_STATE\" FROM $table ORDER BY timestamp DESC LIMIT 5",
-          "format": "table",
+          "datasource": { "type": "questdb-questdb-datasource", "uid": "QuestDB" },
+          "rawSql": "SELECT timestamp, H2_001PT, H2_002PT, H2_003PT, H2_005PT, H2_001FT, CA_001FC, H2_001TT, H2_002TT, H2_003TT, H2_005TT, FC_STACK_V, FC_STACK_i, FC_STATE FROM $table ORDER BY timestamp DESC LIMIT 5",
           "refId": "A"
         }
       ],
