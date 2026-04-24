@@ -4,12 +4,14 @@ All data decisions delegate to SyncService and SSHTransferClient.
 """
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import structlog
 
 from config.settings import get_settings
+from infrastructure.metrics import SYNC_BATCHES, SYNC_LAG, SYNC_RECORDS
 from infrastructure.questdb.client import QuestDBClient
 from infrastructure.questdb.schema import load_schema
 from infrastructure.ssh.transfer import SSHTransferClient
@@ -69,14 +71,23 @@ async def sync_worker() -> None:
     logger.info("Auto-sync worker started (interval=%ds, batch=%d)", interval, settings.batch_size)
     await asyncio.sleep(2)
 
+    _last_success: float = time.time()
+
     while True:
         try:
             logger.debug("Auto-sync check")
             result = await sync_new_data_batch()
-            status = result.get("status")
+            status = result.get("status", "error")
+
+            SYNC_BATCHES.labels(status=status).inc()
+            SYNC_LAG.set(time.time() - _last_success)
 
             if status == "success":
-                logger.info("Batch synced: %d records", result.get("records_synced", 0))
+                records = result.get("records_synced", 0)
+                SYNC_RECORDS.inc(records)
+                _last_success = time.time()
+                SYNC_LAG.set(0)
+                logger.info("Batch synced: %d records", records)
                 if settings.remote_sync_enabled:
                     remote = await sync_to_remote()
                     logger.info("Remote sync: %s", remote.get("status"))
@@ -91,6 +102,7 @@ async def sync_worker() -> None:
             logger.info("Auto-sync worker cancelled")
             break
         except Exception as exc:
+            SYNC_BATCHES.labels(status="error").inc()
             logger.error("Unexpected error in sync worker: %s", exc)
             await asyncio.sleep(60)
             continue

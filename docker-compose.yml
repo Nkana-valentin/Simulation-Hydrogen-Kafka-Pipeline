@@ -86,6 +86,8 @@ services:
         condition: service_healthy
       questdb:
         condition: service_started
+    ports:
+      - "8001:8001"
     environment:
       - KAFKA_BROKER=${KAFKA_BROKER}
       #- KAFKA_BROKER=broker:9092   # ✅ ADD THIS
@@ -93,12 +95,12 @@ services:
       - QUESTDB_HOST=${QUESTDB_HOST}
       - QUESTDB_PORT=${QUESTDB_PORT}
     env_file:
-      - .env  
+      - .env
     volumes:
       - ./TSDB.yml:/app/TSDB.yml
     networks:
       - app_network
-    restart: on-failure  
+    restart: on-failure
 
   fastapi_app:
     build: .

@@ -14,6 +14,7 @@ import structlog
 from domain import auth as domain_auth
 from domain import quality as dq
 from infrastructure.kafka.consumer import KafkaConsumerClient
+from infrastructure.metrics import INGEST_MESSAGES, INGEST_QUALITY_YIELD
 from infrastructure.questdb.client import QuestDBClient
 
 logger = structlog.get_logger(__name__)
@@ -44,13 +45,15 @@ class IngestionStats:
 
     def log(self) -> None:
         total = self.total_received or 1
+        yield_ratio = self.valid / total
+        INGEST_QUALITY_YIELD.set(yield_ratio)
         logger.info(
             "ingestion_stats",
             total_received=self.total_received,
             auth_failed=self.auth_failed,
             valid=self.valid,
             invalid=self.invalid,
-            yield_pct=round(self.valid / total * 100, 1),
+            yield_pct=round(yield_ratio * 100, 1),
         )
 
 
@@ -115,9 +118,11 @@ class IngestionService:
             self._stats.log()
 
     def _process(self, data: Dict[str, Any]) -> None:
+        INGEST_MESSAGES.labels(result="received").inc()
         auth_ok, auth_reason = self._check_auth(data)
         if not auth_ok:
             self._stats.auth_failed += 1
+            INGEST_MESSAGES.labels(result="auth_failed").inc()
             logger.warning("auth_failed", reason=auth_reason)
             self._write_dead_letter(data, "auth", auth_reason)
             return
@@ -143,11 +148,13 @@ class IngestionService:
             result = dq.validate_record(cleaned)
             if result.is_valid:
                 self._stats.valid += 1
+                INGEST_MESSAGES.labels(result="valid").inc()
                 clean_row = self._build_row(cleaned)
                 if not self._db.insert_row(self._validated_table, clean_row):
                     logger.error("validated_insert_failed", row_keys=list(clean_row.keys()))
             else:
                 self._stats.invalid += 1
+                INGEST_MESSAGES.labels(result="invalid").inc()
                 reason = "; ".join(result.errors)
                 logger.warning("dropped_after_clean", errors=result.errors)
                 self._write_dead_letter(data, "validation", reason)
@@ -155,8 +162,10 @@ class IngestionService:
             result = dq.validate_record(data)
             if result.is_valid:
                 self._stats.valid += 1
+                INGEST_MESSAGES.labels(result="valid").inc()
             else:
                 self._stats.invalid += 1
+                INGEST_MESSAGES.labels(result="invalid").inc()
                 reason = "; ".join(result.errors)
                 logger.warning("validation_failed", errors=result.errors)
                 self._write_dead_letter(data, "validation", reason)

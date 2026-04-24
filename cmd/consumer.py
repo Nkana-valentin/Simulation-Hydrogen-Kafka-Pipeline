@@ -2,6 +2,8 @@
 import logging
 import time
 
+from prometheus_client import start_http_server
+
 from config.logging import configure_logging
 from config.settings import get_settings
 from infrastructure.kafka.consumer import KafkaConsumerClient
@@ -16,6 +18,9 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     settings = get_settings()
     schema = load_schema(settings.tsdb_config_path)
+
+    start_http_server(8001)
+    logger.info("Prometheus metrics available on :8001")
 
     logger.info("Waiting 15 s for Kafka to be ready...")
     time.sleep(15)

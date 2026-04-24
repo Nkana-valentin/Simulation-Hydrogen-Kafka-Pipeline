@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI
+from prometheus_client import make_asgi_app
 
 from api.routers import admin_sync, auth, researcher_sync
 from config.logging import configure_logging
@@ -40,3 +41,5 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(researcher_sync.router)
 app.include_router(admin_sync.router)
+
+app.mount("/metrics", make_asgi_app())
