@@ -2,9 +2,10 @@ apiVersion: 1
 
 datasources:
   - name: QuestDB
+    uid: questdb
     type: questdb-questdb-datasource
     jsonData:
-      host: custom_questdb
+      server: custom_questdb
       port: 9000
       tlsSkipVerify: true
     editable: false
