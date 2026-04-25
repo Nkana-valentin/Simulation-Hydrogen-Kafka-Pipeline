@@ -1,6 +1,6 @@
 # Simulation Hydrogen Kafka Pipeline
 
-A containerized, real-time data pipeline that simulates hydrogen lab telemetry, streams it through Kafka, validates it, stores it in QuestDB, and exposes authenticated sync APIs via FastAPI.
+A containerized, real-time data pipeline that simulates hydrogen plant telemetry, streams it through Kafka, validates it, stores it in QuestDB, and exposes authenticated sync APIs via FastAPI — with live metrics in Prometheus and Grafana.
 
 <p align="center">
   <img src="images/github_internship_image_cropped.jpg" width="900" alt="Hydrogen pipeline architecture"/>
@@ -8,36 +8,48 @@ A containerized, real-time data pipeline that simulates hydrogen lab telemetry, 
 
 ## What this project does
 
-This repository models a **Physical Twin → Digital Twin** workflow:
+This repository models a **Physical Twin → Digital Twin** workflow for a hydrogen production and storage plant:
 
-1. A Kafka producer generates lab sensor telemetry.
-2. A Kafka consumer validates/auth-checks records and writes them to QuestDB.
-3. A FastAPI app exposes:
-   - JWT auth endpoints for devices/researchers
-   - researcher-scoped sync endpoints
-   - admin auto-sync endpoints (including optional remote SSH sync)
+1. A physics-based **simulator** generates realistic alkaline electrolyser telemetry (H2 flow, pressures, temperatures) based on Pietra et al., *Energies* 2021, 14, 5347.
+2. A **Kafka producer** wraps each tick with a device JWT and publishes to the raw topic.
+3. A **Kafka consumer** auth-checks and quality-validates each record, writing clean data to `raw_h2_data` and imputed data to `validated_h2_data`; rejected records go to a dead-letter table.
+4. A **FastAPI app** exposes JWT auth endpoints and researcher/admin sync APIs.
+5. **Prometheus** scrapes metrics from both the consumer and the API; **Grafana** visualises live telemetry and pipeline health.
 
 ## Tech stack
 
-- **FastAPI** (API layer)
-- **Apache Kafka + Zookeeper** (streaming backbone)
-- **QuestDB** (time-series storage)
-- **Docker Compose** (orchestration)
-- **JWT auth** (device/researcher/admin access control)
+| Component | Role |
+|---|---|
+| Apache Kafka + Zookeeper | Streaming backbone |
+| QuestDB | Time-series storage (HTTP REST + PostgreSQL wire) |
+| FastAPI | Auth, sync, and metrics API |
+| Prometheus | Metrics scraping |
+| Grafana | Live dashboards |
+| Docker Compose | Full-stack orchestration |
+| JWT + bcrypt | Device / researcher / admin access control |
 
 ## Repository layout
 
 ```text
 .
-├── docker-compose.yml               # Full stack orchestration
-├── Dockerfile                       # FastAPI app image
+├── docker-compose.yml
 ├── docker/
-│   ├── Dockerfile.producer          # Producer image
-│   └── Dockerfile.consumer          # Consumer image
+│   ├── Dockerfile.producer
+│   └── Dockerfile.consumer
 ├── TSDB.yml                         # Table schema — single source of truth
 │
 ├── config/
-│   └── settings.py                  # Pydantic Settings — all env vars
+│   ├── settings.py                  # Pydantic Settings — all env vars
+│   ├── logging.py                   # Central structlog configuration
+│   ├── prometheus.yml               # Scrape config
+│   └── grafana/
+│       ├── provisioning/
+│       │   ├── datasources/         # Prometheus + QuestDB (PostgreSQL)
+│       │   └── dashboards/          # Dashboard provider config
+│       └── dashboards/
+│           ├── h2_pipeline.json     # Pipeline health (ingest rate, yield, sync lag)
+│           └── sensor_data.json     # Per-sensor time series with table selector
+│
 ├── domain/
 │   ├── telemetry.py                 # TelemetryRecord, AuthBlock models
 │   ├── quality.py                   # Pure validation / quality functions
@@ -46,55 +58,48 @@ This repository models a **Physical Twin → Digital Twin** workflow:
 │   ├── kafka/{producer,consumer}.py
 │   ├── questdb/{client,schema}.py
 │   ├── ssh/transfer.py
+│   ├── metrics.py                   # Prometheus counters and gauges
 │   └── registry/
-│       ├── repository.py            # Abstract + JsonFile registry implementations
+│       ├── repository.py
 │       └── data/
 │           ├── device_registry.json
 │           └── researcher_registry.json
 ├── services/
-│   ├── auth_service.py              # Token issuance via registry
-│   ├── ingestion_service.py         # consume → validate → store
-│   └── sync_service.py              # query → paginate → save → state
+│   ├── auth_service.py
+│   ├── ingestion_service.py         # consume → validate → store (+ dead-letter)
+│   └── sync_service.py
 ├── api/
-│   ├── main.py                      # FastAPI app + lifespan
-│   ├── dependencies.py              # FastAPI Depends wiring
-│   └── routers/
-│       ├── auth.py
-│       ├── researcher_sync.py
-│       └── admin_sync.py
+│   ├── main.py
+│   ├── dependencies.py
+│   └── routers/{auth,researcher_sync,admin_sync}.py
 ├── workers/
-│   └── auto_sync_worker.py          # asyncio background sync task
+│   └── auto_sync_worker.py
 ├── simulator/
-│   └── physics_model.py             # generate_physical_state() — no external deps
+│   ├── hydrogen_plant.py            # Alkaline electrolyser plant model (Pietra 2021)
+│   └── physics_model.py             # Shim — initial_state() / generate_physical_state()
 ├── cmd/
-│   ├── producer.py                  # Producer entry point
-│   └── consumer.py                  # Consumer entry point
+│   ├── producer.py
+│   └── consumer.py
 ├── scripts/
-│   └── hash_credentials.py          # bcrypt credential hashing utility
-├── tests/
-│   └── unit/                        # pytest — no Docker needed
-└── diagnostic.sh                    # Runtime diagnostics
+│   └── hash_credentials.py
+└── tests/unit/
 ```
 
 ## Prerequisites
 
 - Docker + Docker Compose
-- Python 3.9+ (only if running parts locally)
-- `curl` and `python3` for test scripts
+- Python 3.9+ (only for local runs or tests)
 
-## Quick start (recommended: Docker Compose)
+## Quick start
 
-### 1) Clone and enter the repo
+### 1. Clone
 
 ```bash
 git clone https://github.com/Nkana-valentin/Simulation-Hydrogen-Kafka-Pipeline.git
 cd Simulation-Hydrogen-Kafka-Pipeline
 ```
 
-### 2) Create a `.env` file
-
-The app relies on environment variables for Kafka, QuestDB, and sync settings.
-Use the following as a practical starter template:
+### 2. Create `.env`
 
 ```env
 # API
@@ -102,7 +107,6 @@ FASTAPI_PORT=8080
 
 # Kafka
 KAFKA_BROKER=broker:9092
-KAFKA_BOOTSTRAP_SERVERS=broker:9092
 KAFKA_TOPIC_RAW=raw_h2_data
 KAFKA_TOPIC_VALIDATED=validated_h2_data
 
@@ -111,7 +115,13 @@ QUESTDB_HOST=questdb
 QUESTDB_PORT=9000
 QUESTDB_USER=admin
 QUESTDB_PASSWORD=quest
-QUESTDB_DATABASE=qdb
+
+# JWT — use a strong random value in any non-local deployment
+JWT_SECRET=change-me-in-production
+
+# Device credentials (producer authenticates with these)
+DEVICE_ID=simulation_device_01
+DEVICE_SECRET=your-device-secret
 
 # Sync worker
 BATCH_SIZE=50
@@ -119,102 +129,74 @@ SYNC_INTERVAL=30s
 LOCAL_SYNC_DIR=./synced_data
 REMOTE_SYNC_ENABLED=false
 
-# SSH (required by current validation logic, even if remote sync is disabled)
+# SSH (required fields even when remote sync is disabled)
 SSH_HOST=localhost
 SSH_USER=user
 SSH_REMOTE_PATH=/tmp
 SSH_KEY_PATH=/app/.ssh/id_rsa
-
-# Optional URLs
-AUTH_SERVICE_URL=http://fastapi_app:8000
 ```
 
-### 3) Start the platform
+### 3. Start the stack
 
 ```bash
 docker compose up -d --build
 ```
 
-### 4) Verify services
+### 4. Service URLs
 
-- FastAPI docs: `http://localhost:${FASTAPI_PORT:-8080}/docs`
-- QuestDB web UI: `http://localhost:9000`
+| Service | URL |
+|---|---|
+| FastAPI docs | `http://localhost:${FASTAPI_PORT}/docs` |
+| QuestDB web UI | `http://localhost:9000` |
+| Prometheus | `http://localhost:9090` |
+| Grafana | `http://localhost:3000` (admin / admin) |
 
-### 5) Follow logs
-
-```bash
-docker logs -f kafka_producer   # telemetry producer
-docker logs -f kafka_consumer   # ingestion + quality checks
-docker logs -f fastapi_app      # API + sync worker
-```
-
-## Local run (without Compose, optional)
-
-If you want to run components manually:
+### 5. Follow logs
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+docker logs -f kafka_producer   # telemetry simulator + producer
+docker logs -f kafka_consumer   # ingestion, quality checks, dead-letter
+docker logs -f fastapi_app      # API + background sync worker
 ```
-
-Then start your dependencies (Kafka + QuestDB), and run each in a separate terminal:
-
-```bash
-uvicorn api.main:app --reload
-python3 -m cmd.producer
-python3 -m cmd.consumer
-```
-
-## API overview
-
-### Authentication
-
-- `POST /device/login` — device JWT
-- `POST /researcher/login` — researcher JWT
-- `POST /verify` — token verification
-- `GET /health` — auth health summary
-
-### Researcher sync
-
-- `POST /sync/trigger` — sync one batch for allowed data types
-- `GET /sync/status` — sync state + available data
-- `POST /sync/complete` — sync until exhausted
-
-### Auto-sync to Hydor (admin)
-
-- `GET /status` — worker + pending data status
-- `POST /trigger` — trigger auto-sync batch
-- `POST /remote-sync/test-ssh` — SSH connectivity/auth check
-- `GET /summary` — synced output summary
 
 ## Data flow
 
-1. **Producer** emits JSON telemetry (sensor value + metadata + auth block).
-2. **Consumer** reads Kafka events, validates required fields/ranges, and tags quality.
-3. **QuestDB** stores records in a topic-named table (default: `raw_h2_data`).
-4. **Sync services** paginate/query QuestDB and export data to filesystem/remote target.
+```
+HydrogenPlantSimulator (simulator/hydrogen_plant.py)
+  └─▶ KafkaProducerClient  [publishes JSON + device JWT]
+        └─▶ Kafka topic  raw_h2_data
+              └─▶ IngestionService
+                    ├─ JWT auth check
+                    │     └─ fail → raw_h2_data_dead_letter
+                    ├─ INSERT raw record  →  raw_h2_data
+                    │     (NaN / Inf stored as NULL)
+                    ├─ dq.clean_record()  (impute NaN with last-known-good)
+                    ├─ dq.validate_record()
+                    │     ├─ pass  →  validated_h2_data
+                    │     └─ fail  →  raw_h2_data_dead_letter
+                    └─ Prometheus metrics updated
+```
+
+`raw_h2_data` preserves every record exactly as received (bad values become NULL). `validated_h2_data` contains only records that pass all quality checks, with injected NaN / Inf replaced by the last valid reading.
 
 ### Example Kafka message
 
-The producer (`cmd/producer.py`) builds this message from `simulator/physics_model.py` and injects the device JWT before publishing:
-
 ```json
 {
-  "timestamp": "2026-04-23T14:22:01.123456Z",
-  "FC_STATE":   100.0,
-  "H2_001FT":   2.34,
-  "H2_001PT":   0.12,
-  "H2_002PT":   0.10,
-  "H2_003PT":   0.09,
-  "H2_005PT":   1.87,
-  "CA_001FC":   0.03,
-  "H2_001TT":   13.84,
-  "H2_002TT":   12.51,
-  "H2_003TT":   12.00,
-  "H2_005TT":   11.48,
-  "FC_STACK_V": 1.78,
-  "FC_STACK_i": 8.51,
+  "timestamp":  "2026-04-25T09:48:01.123456Z",
+  "H2_001PT":  -4.002,
+  "H2_002PT":   4.491,
+  "H2_003PT":   4.441,
+  "H2_005PT":  13.660,
+  "H2_001FT":   2.527,
+  "CA_001FC":   0.202,
+  "H2_001TT":  26.977,
+  "H2_002TT":  16.483,
+  "H2_003TT":  18.521,
+  "H2_005TT":  25.491,
+  "FC_STACK_V": 0.001,
+  "FC_STACK_i": 0.003,
+  "FC_STATE":  100.0,
   "auth": {
     "token":     "<device JWT>",
     "device_id": "simulation_device_01"
@@ -222,78 +204,117 @@ The producer (`cmd/producer.py`) builds this message from `simulator/physics_mod
 }
 ```
 
-The consumer (`cmd/consumer.py`) verifies the JWT and overwrites the `auth` block with the claims extracted from the token (device_id, lab). Only the fields listed in `TSDB.yml` are written to QuestDB — the `auth` block is never stored.
+`H2_001PT` reads ≈ −4 bar g (upstream electrolyser sensor range artefact). `H2_005PT` rises from 10 to 200 bar g over ~5 hours as the storage vessel fills. `H2_001FT` dips to ~15% of nominal every 3 minutes during 8-second purge cycles. FC columns are held at standby since this plant produces H2 rather than consuming it.
+
+## Physics simulator
+
+`simulator/hydrogen_plant.py` implements four coupled sub-models calibrated to Pietra et al. 2021:
+
+| Sub-model | Key behaviour |
+|---|---|
+| `ElectrolyserModel` | 5-min warmup ramp; purge dips every 180 s (8 s, flow → 15%); SEC 93 kWh/kg @ 4.6 bar g |
+| `CompressorModel` | Storage pressure 10 → 200 bar g in ~5 h; drive-air scales 20 → 55 Nm³/h; 45 s air-compressor load/unload cycle |
+| `HydrogenBuffer` | 50 L ideal-gas buffer between EL and booster; mass balance updated every tick |
+| `TemperatureModel` | Slow random walk on all TT channels; Joule-Thomson cooling reproduced on H2 lines |
+
+`simulator/physics_model.py` is a thin shim that keeps the existing `initial_state()` / `generate_physical_state()` API for backward compatibility.
+
+## Monitoring
+
+### Prometheus metrics
+
+| Metric | Type | Labels | Source |
+|---|---|---|---|
+| `h2_ingestion_messages_total` | Counter | `result` (received / valid / invalid / auth_failed) | consumer |
+| `h2_ingestion_quality_yield_ratio` | Gauge | — | consumer |
+| `h2_sync_batches_total` | Counter | `status` | API |
+| `h2_sync_records_synced_total` | Counter | — | API |
+| `h2_sync_lag_seconds` | Gauge | — | API |
+
+Metrics endpoints:
+- Consumer: `http://localhost:8001/` (Prometheus HTTP server)
+- FastAPI: `http://localhost:${FASTAPI_PORT}/metrics`
+
+### Grafana dashboards
+
+Two dashboards are provisioned automatically on startup:
+
+- **H2 Pipeline — Live Telemetry** (`h2-pipeline`): ingest rate (msg/s), quality yield gauge (green ≥ 95%), sync lag, cumulative message and sync counters.
+- **H2 Sensor Data** (`h2-sensors`): per-sensor time series with sensor and table dropdowns. Use `validated_h2_data` for continuous signals; `raw_h2_data` to inspect raw quality.
+
+## API overview
+
+### Authentication
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/device/login` | POST | Issue device JWT (`permissions: ["ingest_data"]`) |
+| `/researcher/login` | POST | Issue researcher JWT (`roles`, `data_access`) |
+| `/verify` | POST | Validate any token |
+| `/health` | GET | Auth service health |
+
+### Researcher sync
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/sync/trigger` | POST | Sync one paginated batch |
+| `/sync/status` | GET | Sync state and available data |
+| `/sync/complete` | POST | Sync all remaining records |
+
+### Auto-sync to Hydor (admin)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/status` | GET | Worker state + pending record count |
+| `/trigger` | POST | Trigger one sync batch manually |
+| `/remote-sync/test-ssh` | POST | Test SSH connectivity |
+| `/summary` | GET | Synced output file summary |
 
 ## Automatic sync
 
-The background sync worker (`workers/auto_sync_worker.py`) starts automatically with the FastAPI app (wired in `api/main.py` via the lifespan hook). It runs on a configurable interval and saves batches locally. Remote SSH transfer to the ORFEO-Hydor platform is optional.
+The background worker (`workers/auto_sync_worker.py`) starts with the FastAPI app lifespan. It polls QuestDB every `SYNC_INTERVAL` seconds and writes a local batch whenever `BATCH_SIZE` or more new records are found. Set `REMOTE_SYNC_ENABLED=true` to also push batches over SSH to the ORFEO-Hydor platform.
 
-**Relevant `.env` variables:**
-
-| Variable | Default | Purpose |
+| Variable | Default | Description |
 |---|---|---|
-| `SYNC_INTERVAL` | `30` | Poll interval in seconds (also accepts `30s`, `2m`) |
-| `BATCH_SIZE` | `50` | Minimum new records before a batch is written |
-| `LOCAL_SYNC_DIR` | `./synced_data` | Local output directory for sync batches |
-| `REMOTE_SYNC_ENABLED` | `false` | Set to `true` to also push batches over SSH |
-| `SSH_HOST` | — | Required when `REMOTE_SYNC_ENABLED=true` |
+| `SYNC_INTERVAL` | `30` | Poll interval (accepts `30`, `30s`, `2m`) |
+| `BATCH_SIZE` | `50` | Minimum new records per batch |
+| `LOCAL_SYNC_DIR` | `./synced_data` | Local output directory |
+| `REMOTE_SYNC_ENABLED` | `false` | Enable SSH push |
+| `SSH_HOST` | — | Remote host |
 | `SSH_USER` | — | SSH username |
-| `SSH_KEY_PATH` | — | Path to private key inside the container |
-| `SSH_REMOTE_PATH` | `/tmp` | Destination path on the remote host |
-
-To enable remote sync, set `REMOTE_SYNC_ENABLED=true` and fill in the `SSH_*` variables in your `.env` before starting the stack. The worker will then upload each completed local batch to the remote target after saving it locally.
+| `SSH_KEY_PATH` | — | Private key path inside container |
+| `SSH_REMOTE_PATH` | `/tmp` | Destination directory on remote |
 
 ## Testing
 
-Unit tests require no external services (no Kafka, QuestDB, or Docker):
+Unit tests require no external services:
 
 ```bash
-JWT_SECRET=any-dev-secret python -m pytest tests/unit/ -v
+JWT_SECRET=any-dev-secret python3 -m pytest tests/unit/ -v
 ```
 
-## Useful scripts
+## Local run (without Docker)
 
-- Full diagnostics:
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-  ```bash
-  bash diagnostic.sh
-  ```
-
-- Auth/sync check:
-
-  ```bash
-  bash test/test_sync_auth.sh
-  ```
-
-- Access-control check:
-
-  ```bash
-  bash test/test_access_control.sh
-  ```
-
-- Rehash credentials (bcrypt):
-
-  ```bash
-  python3 scripts/hash_credentials.py
-  ```
+# In separate terminals (Kafka + QuestDB must already be running):
+uvicorn api.main:app --reload
+python3 -m cmd.producer
+python3 -m cmd.consumer
+```
 
 ## Troubleshooting
 
-- **FastAPI exits on startup with missing env vars**
-  - Ensure `KAFKA_BOOTSTRAP_SERVERS` and `SSH_HOST` are set.
-- **Producer/consumer cannot reach Kafka**
-  - Confirm broker health: `docker ps` and broker logs.
-  - Verify broker address is `broker:9092` inside containers.
-- **No data in QuestDB**
-  - Check consumer logs for authentication/quality errors.
-  - Query row count in QuestDB UI or via `/exec` endpoint.
-
-## Contributing
-
-1. Create a branch.
-2. Make focused, testable changes.
-3. Run diagnostics/scripts relevant to your change.
-4. Open a PR with context, setup notes, and test output.
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| FastAPI exits at startup | `JWT_SECRET` not set | Add `JWT_SECRET=...` to `.env` |
+| Producer exits at startup | `DEVICE_SECRET` not set | Add `DEVICE_SECRET=...` to `.env` |
+| Producer cannot reach API | Auth service not ready | Producer retries 10× with 5 s back-off |
+| No data in QuestDB | Consumer auth failure | Check `docker logs kafka_consumer` for `auth_failed` |
+| Grafana panels show no data | Wrong table selected | Switch dropdown to `validated_h2_data` |
+| Grafana datasource error | QuestDB not reachable | Verify `custom_questdb:8812` is up |
 
 ## License
 
