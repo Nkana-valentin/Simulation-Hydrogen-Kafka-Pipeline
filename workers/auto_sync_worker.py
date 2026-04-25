@@ -33,7 +33,7 @@ def _get_service() -> SyncService:
         db = QuestDBClient(host=settings.questdb_host, port=settings.questdb_port)
         _svc = SyncService(
             questdb=db,
-            table_name=settings.kafka_topic_raw,
+            table_name=settings.kafka_topic_validated,
             sync_dir=Path(settings.local_sync_dir),
             schema_columns=schema["fields"],
         )
