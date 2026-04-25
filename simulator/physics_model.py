@@ -25,8 +25,7 @@ def initial_state() -> Dict[str, Any]:
 
 def generate_physical_state(
     prev: Dict[str, Any],
-    introduce_issues: bool = False,
-) -> Dict[str, Any]:
+    introduce_issues: bool = False,) -> Dict[str, Any]:
     """
     Advance the simulation by one timestep.
     `prev` is accepted for API compatibility but not used — state is
