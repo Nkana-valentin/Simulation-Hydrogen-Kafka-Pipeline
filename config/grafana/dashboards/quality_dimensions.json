@@ -1,0 +1,232 @@
+{
+  "title": "H2 Data Quality Dimensions",
+  "uid": "h2-quality",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Weighted Quality Score — WQS and LWQS",
+      "description": "WQS = 0.7×accuracy + 0.3×completeness per message. LWQS = exponentially weighted mean of last 60 WQS scores (β=5), smoothing transient drops.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, wqs AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "WQS (per-message)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, lwqs AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "LWQS (longitudinal trend)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 5 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": 0   },
+              { "color": "yellow", "value": 0.8 },
+              { "color": "green",  "value": 0.95 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Quality Score Drift (QSD)",
+      "description": "QSD = WQS − LWQS. Positive means current quality is above trend; negative signals degradation. A sustained negative drift warrants investigation.",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, qsd AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "QSD",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "orange", "mode": "fixed" },
+          "custom": { "lineWidth": 1.5, "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": -0.1 },
+              { "color": "green", "value": 0    }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Accuracy (Hampel outlier filter)",
+      "description": "1 − outlier_fraction per field, averaged across all sensor fields. Uses a 60-message rolling window and MAD-based Hampel filter.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 7 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, accuracy AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "accuracy",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1, "unit": "percentunit",
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "custom": { "lineWidth": 1.5 }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Completeness",
+      "description": "Fraction of non-null fields in the raw record (per-message).",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 7 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, completeness AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "completeness",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1, "unit": "percentunit",
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "custom": { "lineWidth": 1.5 }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Timeliness",
+      "description": "max(0, 1 − age_seconds / 120). Decays to 0 if a record is more than 2 minutes old when it arrives at the consumer.",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 7 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, timeliness AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "timeliness",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1, "unit": "percentunit",
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "custom": { "lineWidth": 1.5 }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Temporal Completeness",
+      "description": "min(1, processed_count / 60). Ramps from 0 to 1 as the 60-message observation window fills after a consumer restart.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "time_series",
+          "rawSql": "SELECT timestamp AS time, temporal_completeness AS value FROM raw_h2_data_quality WHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo() ORDER BY timestamp",
+          "legendFormat": "temporal completeness",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1, "unit": "percentunit",
+          "color": { "fixedColor": "semi-dark-yellow", "mode": "fixed" },
+          "custom": { "lineWidth": 1.5 }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Current Quality Snapshot",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 15, "w": 16, "h": 6 },
+      "datasource": { "type": "postgres", "uid": "questdb" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "questdb" },
+          "format": "table",
+          "rawSql": "SELECT accuracy, completeness, timeliness, wqs, lwqs, qsd FROM raw_h2_data_quality ORDER BY timestamp DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": 0    },
+              { "color": "yellow", "value": 0.8  },
+              { "color": "green",  "value": 0.95 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "qsd" },
+            "properties": [
+              { "id": "min", "value": -0.2 },
+              { "id": "max", "value": 0.2  },
+              { "id": "thresholds", "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red",   "value": -0.1 },
+                    { "color": "green", "value": 0    }
+                  ]
+              }}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

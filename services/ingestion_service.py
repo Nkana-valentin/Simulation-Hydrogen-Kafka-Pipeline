@@ -22,6 +22,18 @@ logger = structlog.get_logger(__name__)
 _STATS_EVERY_N = 100
 _STATS_EVERY_SECS = 30
 
+_QUALITY_FIELDS = [
+    "accuracy", "completeness", "temporal_completeness",
+    "timeliness", "wqs", "lwqs", "qsd",
+]
+
+_QUALITY_SCHEMA = {
+    "tags": ["device_id"],
+    "fields": _QUALITY_FIELDS,
+    "tag_types": {"device_id": "STRING"},
+    "field_types": {f: "FLOAT" for f in _QUALITY_FIELDS},
+}
+
 _DEAD_LETTER_SCHEMA = {
     "tags": ["failure_category", "failure_reason", "device_id", "raw_payload"],
     "fields": [],
@@ -72,6 +84,7 @@ class IngestionService:
         self._db = questdb
         self._table = table_name
         self._dead_letter_table = f"{table_name}_dead_letter"
+        self._quality_table = f"{table_name}_quality"
         self._validated_table = validated_table
         self._schema = schema
         self._schema_fields: List[str] = schema.get("fields", [])
@@ -87,6 +100,8 @@ class IngestionService:
     def setup(self) -> None:
         self._db.create_table(self._table, self._schema)
         self._db.create_table(self._dead_letter_table, _DEAD_LETTER_SCHEMA)
+        self._db.create_table(self._quality_table, _QUALITY_SCHEMA)
+        logger.info("quality_table_ready", table=self._quality_table)
         logger.info("dead_letter_table_ready", table=self._dead_letter_table)
         if self._validated_table:
             self._db.create_table(self._validated_table, self._schema)
@@ -136,6 +151,7 @@ class IngestionService:
             data, self._field_history, self._wqs_history, self._processed
         )
         logger.debug("quality_dimensions", **{k: round(v, 3) for k, v in dims.items()})
+        self._store_quality_dimensions(data, dims)
         self._stats.processed += 1
 
         if self._validated_table:
@@ -169,6 +185,20 @@ class IngestionService:
                 reason = "; ".join(result.errors)
                 logger.warning("validation_failed", errors=result.errors)
                 self._write_dead_letter(data, "validation", reason)
+
+    def _store_quality_dimensions(
+        self, data: Dict[str, Any], dims: Dict[str, float]
+    ) -> None:
+        auth = data.get("auth", {})
+        device_id = auth.get("device_id", "") if isinstance(auth, dict) else ""
+        ts = data.get(
+            "timestamp",
+            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z",
+        )
+        row: Dict[str, Any] = {"timestamp": ts, "device_id": device_id}
+        row.update({k: round(v, 6) for k, v in dims.items()})
+        if not self._db.insert_row(self._quality_table, row):
+            logger.warning("quality_insert_failed")
 
     def _write_dead_letter(
         self, data: Dict[str, Any], category: str, reason: str
