@@ -32,7 +32,7 @@ def main() -> None:
         kafka=kafka,
         questdb=db,
         table_name=settings.kafka_topic_raw,
-        validated_table=settings.kafka_topic_validated,
+        validated_table=settings.validated_table,
         schema=schema,
         jwt_secret=settings.jwt_secret,
         jwt_algorithm=settings.jwt_algorithm,

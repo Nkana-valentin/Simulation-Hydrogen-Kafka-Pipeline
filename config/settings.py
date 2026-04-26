@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # Kafka
     kafka_broker: str = "broker:9092"
     kafka_topic_raw: str = "raw_h2_data"
-    kafka_topic_validated: str = "validated_h2_data"
+    validated_table: str = "validated_h2_data"
 
     # QuestDB
     questdb_host: str = "questdb"

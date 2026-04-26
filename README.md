@@ -108,7 +108,7 @@ FASTAPI_PORT=8080
 # Kafka
 KAFKA_BROKER=broker:9092
 KAFKA_TOPIC_RAW=raw_h2_data
-KAFKA_TOPIC_VALIDATED=validated_h2_data
+VALIDATED_TABLE=validated_h2_data
 
 # QuestDB
 QUESTDB_HOST=questdb

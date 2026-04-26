@@ -9,7 +9,6 @@ kafka:
   bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}
   topics:
     raw_data: ${KAFKA_TOPIC_RAW}
-    validated_data: ${KAFKA_TOPIC_VALIDATED}
 
 security:
   api_keys:
