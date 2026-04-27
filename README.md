@@ -47,8 +47,9 @@ This repository models a **Physical Twin → Digital Twin** workflow for a hydro
 │       │   ├── datasources/         # Prometheus + QuestDB (PostgreSQL)
 │       │   └── dashboards/          # Dashboard provider config
 │       └── dashboards/
-│           ├── h2_pipeline.json     # Pipeline health (ingest rate, yield, sync lag)
-│           └── sensor_data.json     # Per-sensor time series with table selector
+│           ├── h2_pipeline.json        # Pipeline health (ingest rate, yield, sync lag)
+│           ├── sensor_data.json        # Per-sensor time series with table selector
+│           └── quality_dimensions.json # Per-message quality scores (WQS, LWQS, QSD, …)
 │
 ├── domain/
 │   ├── telemetry.py                 # TelemetryRecord, AuthBlock models
@@ -108,13 +109,13 @@ FASTAPI_PORT=8080
 # Kafka
 KAFKA_BROKER=broker:9092
 KAFKA_TOPIC_RAW=raw_h2_data
-VALIDATED_TABLE=validated_h2_data
 
 # QuestDB
 QUESTDB_HOST=questdb
 QUESTDB_PORT=9000
 QUESTDB_USER=admin
 QUESTDB_PASSWORD=quest
+VALIDATED_TABLE=validated_h2_data   # QuestDB table name, not a Kafka topic
 
 # JWT — use a strong random value in any non-local deployment
 JWT_SECRET=change-me-in-production
@@ -170,6 +171,8 @@ HydrogenPlantSimulator (simulator/hydrogen_plant.py)
                     │     └─ fail → raw_h2_data_dead_letter
                     ├─ INSERT raw record  →  raw_h2_data
                     │     (NaN / Inf stored as NULL)
+                    ├─ dq.evaluate_dimensions()  →  raw_h2_data_quality
+                    │     (accuracy, completeness, timeliness, WQS, LWQS, QSD)
                     ├─ dq.clean_record()  (impute NaN with last-known-good)
                     ├─ dq.validate_record()
                     │     ├─ pass  →  validated_h2_data
@@ -237,10 +240,11 @@ Metrics endpoints:
 
 ### Grafana dashboards
 
-Two dashboards are provisioned automatically on startup:
+Three dashboards are provisioned automatically on startup:
 
-- **H2 Pipeline — Live Telemetry** (`h2-pipeline`): ingest rate (msg/s), quality yield gauge (green ≥ 95%), sync lag, cumulative message and sync counters.
-- **H2 Sensor Data** (`h2-sensors`): per-sensor time series with sensor and table dropdowns. Use `validated_h2_data` for continuous signals; `raw_h2_data` to inspect raw quality.
+- **H2 Pipeline — Live Telemetry** (`h2-pipeline`): ingest rate (msg/s), quality yield gauge (green ≥ 95%), sync lag, cumulative message and sync counters. Datasource: Prometheus.
+- **H2 Sensor Data** (`h2-sensors`): per-sensor time series with sensor and table dropdowns. Use `validated_h2_data` for continuous signals; `raw_h2_data` to inspect raw quality. Datasource: QuestDB.
+- **H2 Data Quality Dimensions** (`h2-quality`): per-message WQS, LWQS, QSD, accuracy, completeness, timeliness, temporal completeness. Thresholds: green ≥ 0.95, yellow ≥ 0.80, red below. Datasource: QuestDB (`raw_h2_data_quality` table).
 
 ## API overview
 

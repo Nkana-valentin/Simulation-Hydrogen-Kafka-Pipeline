@@ -140,15 +140,15 @@ function signatures for backward compatibility.
 
 Apache Kafka~\cite{kafka} provides the decoupling layer between the
 simulator and the ingestion service.
-Two topics are used:
+A single topic is used:
 
 \begin{itemize}
-  \item \textbf{\texttt{raw\_h2\_data}} — the primary ingest topic.
+  \item \textbf{\texttt{raw\_h2\_data}} — the sole Kafka topic.
         Every message published by the producer lands here.
-  \item \textbf{\texttt{validated\_h2\_data}} — the table name used as a
-        logical label for validated records persisted by the consumer.
-        (Not a separate Kafka topic; the consumer writes directly to
-        QuestDB after validation.)
+        The consumer reads from this topic, applies quality checks, and
+        writes results directly to QuestDB.
+        \texttt{validated\_h2\_data} is a QuestDB \emph{table} name, not a
+        second Kafka topic.
 \end{itemize}
 
 The Confluent Platform 7.4 Kafka and Zookeeper images are used.
@@ -353,7 +353,7 @@ without additional dependencies.
 \subsection{Table layout}
 \label{subsec:tables}
 
-Three tables are maintained at runtime (Table~\ref{tab:tables}).
+Four tables are maintained at runtime (Table~\ref{tab:tables}).
 
 \begin{table}[H]
   \centering
