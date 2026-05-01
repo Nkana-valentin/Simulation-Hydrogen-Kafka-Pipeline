@@ -65,11 +65,29 @@ async def sync_to_remote() -> Dict[str, Any]:
     return client.upload_directory(latest, settings.ssh_remote_path)
 
 
+async def _wait_for_questdb(host: str, port: int, timeout: int = 60) -> None:
+    """Poll QuestDB /exec until it responds or timeout expires."""
+    import httpx
+    url = f"http://{host}:{port}/exec"
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(url, params={"query": "SELECT 1"})
+                if resp.status_code == 200:
+                    logger.info("questdb_ready", host=host, port=port)
+                    return
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+    logger.warning("questdb_not_ready_after_timeout", timeout=timeout)
+
+
 async def sync_worker() -> None:
     settings = get_settings()
     interval = settings.sync_interval
     logger.info("Auto-sync worker started (interval=%ds, batch=%d)", interval, settings.batch_size)
-    await asyncio.sleep(2)
+    await _wait_for_questdb(settings.questdb_host, settings.questdb_port)
 
     _last_success: float = time.time()
 

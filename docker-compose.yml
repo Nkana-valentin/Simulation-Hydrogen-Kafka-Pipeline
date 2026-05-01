@@ -127,6 +127,8 @@ services:
     container_name: fastapi_app
     ports:
       - "${FASTAPI_PORT}:8000"
+    depends_on:
+      - questdb
     environment:
       - QUESTDB_HOST=${QUESTDB_HOST}
       - QUESTDB_PORT=${QUESTDB_PORT}
