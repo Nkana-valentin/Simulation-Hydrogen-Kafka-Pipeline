@@ -84,6 +84,7 @@ class SSHTransferClient:
             ssh.exec_command(f"mkdir -p {remote_path}")[1].channel.recv_exit_status()
             sftp = ssh.open_sftp()
             transferred = 0
+            failed = 0
             for file in files:
                 dest = f"{remote_path}/{file.name}"
                 try:
@@ -92,16 +93,20 @@ class SSHTransferClient:
                         transferred += 1
                         logger.info("sftp_uploaded", file=file.name, dest=dest)
                     else:
+                        failed += 1
                         logger.error("sftp_integrity_failed", file=file.name)
                 except Exception as exc:
+                    failed += 1
                     logger.error("sftp_upload_failed", file=file.name, error=str(exc))
             sftp.close()
         finally:
             ssh.close()
 
+        status = "success" if failed == 0 else ("partial" if transferred > 0 else "error")
         return {
-            "status": "success",
+            "status": status,
             "files_transferred": transferred,
+            "files_failed": failed,
             "total_files": len(files),
             "remote_path": remote_path,
         }

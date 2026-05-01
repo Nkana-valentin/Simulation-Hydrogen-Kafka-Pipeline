@@ -11,6 +11,11 @@ services:
       - "2181:2181"
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   broker:
     image: confluentinc/cp-kafka:7.4.0
@@ -23,13 +28,11 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # FIX: Use broker:9092 for internal communication
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # These help with connection issues
       KAFKA_OPTS: "-Djava.net.preferIPv4Stack=true"
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
@@ -39,6 +42,11 @@ services:
       start_period: 30s
     networks:
       - app_network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
 
   questdb:
     image: questdb/questdb:latest
@@ -48,13 +56,17 @@ services:
       - "9000:9000"
       - "8812:8812"
     environment:
-    - QDB_PG_USER=${QUESTDB_USER}
-    - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
+      - QDB_PG_USER=${QUESTDB_USER}
+      - QDB_PG_PASSWORD=${QUESTDB_PASSWORD}
     volumes:
       - ./questdb_data:/var/lib/questdb
     networks:
       - app_network
-
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
 
   kafka_producer:
     build:
@@ -68,13 +80,17 @@ services:
         condition: service_started
     environment:
       - KAFKA_BROKER=${KAFKA_BROKER}
-      #- KAFKA_BROKER=broker:9092   # ✅ ADD THIS
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
     env_file:
-      - .env   
+      - .env
     networks:
       - app_network
-    restart: on-failure   
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   kafka_consumer:
     build:
@@ -90,8 +106,7 @@ services:
       - "8001:8001"
     environment:
       - KAFKA_BROKER=${KAFKA_BROKER}
-      #- KAFKA_BROKER=broker:9092   # ✅ ADD THIS
-      - KAFKA_TOPIC=${KAFKA_TOPIC_RAW}  # Use environment variable for topic
+      - KAFKA_TOPIC=${KAFKA_TOPIC_RAW}
       - QUESTDB_HOST=${QUESTDB_HOST}
       - QUESTDB_PORT=${QUESTDB_PORT}
     env_file:
@@ -101,6 +116,11 @@ services:
     networks:
       - app_network
     restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   fastapi_app:
     build: .
@@ -115,18 +135,22 @@ services:
       - SSH_HOST=${SSH_HOST}
       - SSH_USER=${SSH_USER}
       - SSH_REMOTE_PATH=${SSH_REMOTE_PATH}
-      - SSH_KEY_PATH=${SSH_KEY_PATH}  # ← Add this to pass the path to container
-      #- SSH_KEY_PATH=/app/ssh_key
+      - SSH_KEY_PATH=${SSH_KEY_PATH}
     env_file:
       - .env
     networks:
-        - app_network
+      - app_network
     restart: on-failure
     volumes:
       - ./synced_data:/app/synced_data
-      - ~/.ssh:/app/.ssh:ro
-      #- /u/v/vnkanang/.ssh:/app/.ssh:ro
-      #- /u/v/vnkanang/.ssh/id_ed25519:/app/ssh_key:ro
+      # Mount only the specific key needed, not the entire ~/.ssh directory.
+      # Set SSH_KEY_FILE in .env to the filename of your private key (e.g. id_ed25519).
+      - ${SSH_KEY_DIR:-~/.ssh}/${SSH_KEY_FILE:-id_ed25519}:/app/.ssh/id_ed25519:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -144,6 +168,11 @@ services:
     networks:
       - app_network
     restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   grafana:
     image: grafana/grafana:10.4.2
@@ -151,7 +180,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Set GRAFANA_ADMIN_PASSWORD in .env — never use the default in any
+      # deployment that is reachable from outside localhost.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - QUESTDB_USER=${QUESTDB_USER}
       - QUESTDB_PASSWORD=${QUESTDB_PASSWORD}
@@ -164,7 +195,12 @@ services:
     networks:
       - app_network
     restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 networks:
-    app_network:
-      driver: bridge
+  app_network:
+    driver: bridge

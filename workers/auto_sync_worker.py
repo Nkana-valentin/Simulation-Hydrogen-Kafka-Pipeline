@@ -60,7 +60,7 @@ async def sync_to_remote() -> Dict[str, Any]:
         host=settings.ssh_host,
         user=settings.ssh_user,
         key_path=settings.ssh_key_path,
-        password=settings.ssh_password,
+        password=settings.ssh_password.get_secret_value(),
     )
     return client.upload_directory(latest, settings.ssh_remote_path)
 
