@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Simulation-Hydrogen-Kafka-Pipeline"
+authors:
+  - family-names: "Nkana Ngan"
+    given-names: "Valentin"
+    email: valentin.nkana@gmail.com
+license: MIT
+repository-code: "https://github.com/Nkana-valentin/Simulation-Hydrogen-Kafka-Pipeline"
+date-released: 2026-05-07
