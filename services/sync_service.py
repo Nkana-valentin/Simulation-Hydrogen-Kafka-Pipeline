@@ -5,6 +5,8 @@ Handles both researcher-scoped sync and system-wide auto-sync.
 import csv
 import json
 import math
+import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,6 +16,17 @@ import structlog
 from infrastructure.questdb.client import QuestDBClient
 
 logger = structlog.get_logger(__name__)
+
+# Allowlist for values that flow into SQL WHERE clauses.
+# Only alphanumeric characters, underscores, hyphens, and dots are permitted.
+_SAFE_VALUE_RE = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+
+
+def _sql_safe(value: str) -> str:
+    """Raise ValueError if value contains characters that could break SQL."""
+    if not _SAFE_VALUE_RE.match(value):
+        raise ValueError(f"Unsafe value rejected for SQL filter: {value!r}")
+    return value
 
 
 class SyncService:
@@ -32,6 +45,8 @@ class SyncService:
         self._columns = ["timestamp", *schema_columns]
         self._sync_dir.mkdir(parents=True, exist_ok=True)
         self._state_dir.mkdir(parents=True, exist_ok=True)
+        # Protects concurrent writes to per-researcher state files.
+        self._state_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Auto-sync (system-wide)
@@ -91,7 +106,7 @@ class SyncService:
         self._last_sync_file.write_text(timestamp)
 
     # ------------------------------------------------------------------
-    # Researcher-scoped sync
+    # Researcher-scoped sync (keyset pagination by timestamp)
     # ------------------------------------------------------------------
 
     def fetch_researcher_batch(
@@ -99,29 +114,38 @@ class SyncService:
         researcher_id: str,
         data_access: List[str],
         data_type: Optional[str],
-        batch_size: int,) -> Dict[str, Any]:
+        batch_size: int,
+    ) -> Dict[str, Any]:
         state = self.get_researcher_state(researcher_id, data_type)
-        offset = state.get("last_offset", 0)
+        last_ts = state.get("last_timestamp")
 
         access_filter = self._build_access_filter(data_access, data_type)
-        total_sql = f"SELECT COUNT(*) as count FROM {self._table} WHERE {access_filter}"
+        ts_clause = f"AND timestamp > '{last_ts}'" if last_ts else ""
+
+        total_sql = (
+            f"SELECT COUNT(*) as count FROM {self._table} "
+            f"WHERE {access_filter} {ts_clause}"
+        )
         count_rows = self._db.query(total_sql) or []
         total = count_rows[0].get("count", 0) if count_rows else 0
 
         data_sql = (
-            f"SELECT * FROM {self._table} WHERE {access_filter} "
-            f"ORDER BY timestamp ASC LIMIT {batch_size} OFFSET {offset}"
+            f"SELECT * FROM {self._table} "
+            f"WHERE {access_filter} {ts_clause} "
+            f"ORDER BY timestamp ASC LIMIT {batch_size}"
         )
         records = self._db.query(data_sql) or []
+
+        latest_ts = records[-1].get("timestamp") if records else None
 
         return {
             "records": records,
             "total_count": total,
-            "current_offset": offset,
-            "next_offset": offset + len(records) if len(records) == batch_size else None,
-            "has_more": (offset + len(records)) < total,
+            "last_timestamp": last_ts,
+            "next_timestamp": latest_ts,
+            "has_more": len(records) == batch_size,
             "record_count": len(records),
-            "latest_timestamp": records[-1].get("timestamp") if records else None,
+            "latest_timestamp": latest_ts,
             "data_type": data_type or "all_authorized",
         }
 
@@ -144,8 +168,8 @@ class SyncService:
 
         batch_info = {
             "data_type": data_type_key,
-            "start_offset": batch_result.get("current_offset", 0),
-            "end_offset": batch_result.get("current_offset", 0) + len(records),
+            "last_timestamp": batch_result.get("last_timestamp"),
+            "next_timestamp": batch_result.get("next_timestamp"),
             "record_count": len(records),
             "latest_timestamp": batch_result.get("latest_timestamp"),
             "batch_number": batch_number,
@@ -161,9 +185,8 @@ class SyncService:
             batch_info,
         )
 
-        next_offset = batch_result.get("next_offset")
         has_more = batch_result.get("has_more", False)
-        pct = round(next_offset / total * 100, 2) if next_offset and total else 100.0
+        pct = 100.0 if not has_more else round((batch_number / total_batches) * 100, 2) if total_batches else 0.0
 
         return {
             "status": "success",
@@ -197,13 +220,14 @@ class SyncService:
         if not path.exists():
             return {"researcher_id": researcher_id, "data_types": {}, "total_records_synced": 0}
         try:
-            state = json.loads(path.read_text())
+            with self._state_lock:
+                state = json.loads(path.read_text())
             if data_type:
                 dt_state = state.get("data_types", {}).get(data_type, {})
                 return {
                     "researcher_id": researcher_id,
                     "data_type": data_type,
-                    "last_offset": dt_state.get("last_offset", 0),
+                    "last_timestamp": dt_state.get("last_timestamp"),
                     "records_synced": dt_state.get("records_synced", 0),
                 }
             return state
@@ -220,27 +244,30 @@ class SyncService:
         batch_info: Dict[str, Any],
     ) -> None:
         path = self._researcher_state_file(researcher_id)
-        state = json.loads(path.read_text()) if path.exists() else {
-            "researcher_id": researcher_id,
-            "name": name,
-            "institution": institution,
-            "data_types": {},
-            "total_records_synced": 0,
-            "batches": [],
-        }
-        dt = state["data_types"].setdefault(data_type, {
-            "last_offset": 0,
-            "records_synced": 0,
-            "batches_completed": 0,
-        })
-        dt["last_offset"] = batch_info.get("end_offset", dt["last_offset"])
-        dt["records_synced"] += batch_info.get("record_count", 0)
-        dt["batches_completed"] += 1
-        state["total_records_synced"] += batch_info.get("record_count", 0)
-        state["last_sync_time"] = datetime.now().isoformat()
-        state.setdefault("batches", []).append(batch_info)
-        state["batches"] = state["batches"][-10:]
-        path.write_text(json.dumps(state, indent=2, default=str))
+        with self._state_lock:
+            state = json.loads(path.read_text()) if path.exists() else {
+                "researcher_id": researcher_id,
+                "name": name,
+                "institution": institution,
+                "data_types": {},
+                "total_records_synced": 0,
+                "batches": [],
+            }
+            dt = state["data_types"].setdefault(data_type, {
+                "last_timestamp": None,
+                "records_synced": 0,
+                "batches_completed": 0,
+            })
+            next_ts = batch_info.get("next_timestamp")
+            if next_ts:
+                dt["last_timestamp"] = next_ts
+            dt["records_synced"] += batch_info.get("record_count", 0)
+            dt["batches_completed"] += 1
+            state["total_records_synced"] += batch_info.get("record_count", 0)
+            state["last_sync_time"] = datetime.now().isoformat()
+            state.setdefault("batches", []).append(batch_info)
+            state["batches"] = state["batches"][-10:]
+            path.write_text(json.dumps(state, indent=2, default=str))
 
     def _researcher_state_file(self, researcher_id: str) -> Path:
         safe = researcher_id.replace("@", "_at_").replace(".", "_dot_")
@@ -272,9 +299,8 @@ class SyncService:
         out_dir = self._sync_dir / f"{inst}_{name}" / data_type
         out_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        start = batch_info.get("start_offset", 0)
-        end = batch_info.get("end_offset", 0)
-        base = out_dir / f"batch_{ts}_offsets_{start}_{end}"
+        batch_num = batch_info.get("batch_number", 0)
+        base = out_dir / f"batch_{ts}_{batch_num}"
         self._write_json(base.with_suffix(".json"), {"batch_info": batch_info, "records": records})
         self._write_csv(base.with_suffix(".csv"), records)
         return {"status": "success", "file": str(base.with_suffix(".json"))}
@@ -294,9 +320,11 @@ class SyncService:
 
     @staticmethod
     def _build_access_filter(data_access: List[str], data_type: Optional[str]) -> str:
+        """Build a WHERE clause fragment. All values are validated against an
+        alphanumeric allowlist before interpolation to prevent SQL injection."""
         if data_type:
-            return f"measurement_type = '{data_type}'"
+            return f"measurement_type = '{_sql_safe(data_type)}'"
         if not data_access or "all" in data_access:
             return "1=1"
-        conditions = [f"measurement_type = '{a}'" for a in data_access]
+        conditions = [f"measurement_type = '{_sql_safe(a)}'" for a in data_access]
         return "(" + " OR ".join(conditions) + ")"

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -15,10 +15,17 @@ class Settings(BaseSettings):
     questdb_host: str = "questdb"
     questdb_port: int = 9000
 
-    # JWT — no default; must be set in environment
+    # JWT — no default; must be set in environment; minimum 32 characters
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     token_expiry_hours: int = 24
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def _validate_jwt_secret(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters")
+        return v
 
     # Sync worker
     batch_size: int = 50
@@ -29,9 +36,6 @@ class Settings(BaseSettings):
     @field_validator("sync_interval", mode="before")
     @classmethod
     def _parse_duration(cls, v: Any) -> int:
-        """
-        Allow values like '30s' or '2m' as well as plain integers.
-        """
         if isinstance(v, int):
             return v
         s = str(v).strip()
@@ -46,14 +50,14 @@ class Settings(BaseSettings):
     ssh_user: str = ""
     ssh_remote_path: str = "/tmp"
     ssh_key_path: str = ""
-    ssh_password: str = ""
+    ssh_password: SecretStr = SecretStr("")
 
     # Producer → auth service
     auth_service_url: str = "http://fastapi_app:8000"
 
     # Device identity (used by producer to authenticate against auth service)
     device_id: str = "simulation_device_01"
-    device_secret: str = ""
+    device_secret: SecretStr = SecretStr("")
 
     # TSDB schema config path
     tsdb_config_path: str = "TSDB.yml"

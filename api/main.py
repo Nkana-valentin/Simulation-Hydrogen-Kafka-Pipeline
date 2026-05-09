@@ -20,9 +20,10 @@ _sync_task: Optional[asyncio.Task] = None
 async def lifespan(app: FastAPI):
     global _sync_task
     logger.info("startup")
-    _sync_task = asyncio.create_task(sync_worker())
+    if _sync_task is None or _sync_task.done():
+        _sync_task = asyncio.create_task(sync_worker())
     yield
-    if _sync_task:
+    if _sync_task and not _sync_task.done():
         _sync_task.cancel()
         try:
             await _sync_task
@@ -42,4 +43,7 @@ app.include_router(auth.router)
 app.include_router(researcher_sync.router)
 app.include_router(admin_sync.router)
 
+# NOTE: /metrics is intentionally unauthenticated so Prometheus can scrape it
+# without credentials. Restrict network access at the infrastructure level
+# (e.g. firewall, Docker network policy) rather than at the application level.
 app.mount("/metrics", make_asgi_app())

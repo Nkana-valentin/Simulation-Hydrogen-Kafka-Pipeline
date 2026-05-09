@@ -117,12 +117,15 @@ QUESTDB_USER=admin
 QUESTDB_PASSWORD=quest
 VALIDATED_TABLE=validated_h2_data   # QuestDB table name, not a Kafka topic
 
-# JWT — use a strong random value in any non-local deployment
-JWT_SECRET=change-me-in-production
+# JWT — minimum 32 characters; use a strong random value in any non-local deployment
+JWT_SECRET=change-me-in-production-must-be-32-chars-min
 
 # Device credentials (producer authenticates with these)
 DEVICE_ID=simulation_device_01
 DEVICE_SECRET=your-device-secret
+
+# Grafana — change before any non-localhost deployment
+GRAFANA_ADMIN_PASSWORD=admin
 
 # Sync worker
 BATCH_SIZE=50
@@ -130,11 +133,14 @@ SYNC_INTERVAL=30s
 LOCAL_SYNC_DIR=./synced_data
 REMOTE_SYNC_ENABLED=false
 
-# SSH (required fields even when remote sync is disabled)
+# SSH — mount a single key file rather than the whole ~/.ssh directory
+# SSH_KEY_DIR is the host directory containing the key; SSH_KEY_FILE is the filename.
 SSH_HOST=localhost
 SSH_USER=user
 SSH_REMOTE_PATH=/tmp
-SSH_KEY_PATH=/app/.ssh/id_rsa
+SSH_KEY_PATH=/app/.ssh/id_ed25519
+SSH_KEY_DIR=~/.ssh
+SSH_KEY_FILE=id_ed25519
 ```
 
 ### 3. Start the stack

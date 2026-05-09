@@ -49,7 +49,7 @@ def _get_token(auth_url: str, device_id: str, device_secret: str, retries: int =
 def main() -> None:
     settings = get_settings()
 
-    if not settings.device_secret:
+    if not settings.device_secret.get_secret_value():
         raise RuntimeError("DEVICE_SECRET is not set in environment")
 
     client = KafkaProducerClient(broker=settings.kafka_broker, topic=settings.kafka_topic_raw)
@@ -59,7 +59,8 @@ def main() -> None:
 
     client.connect()
 
-    token = _get_token(settings.auth_service_url, settings.device_id, settings.device_secret)
+    _secret = settings.device_secret.get_secret_value()
+    token = _get_token(settings.auth_service_url, settings.device_id, _secret)
 
     state = initial_state()
     count = 0
@@ -67,9 +68,7 @@ def main() -> None:
         while True:
             if _needs_refresh(token):
                 logger.info("token_refresh")
-                token = _get_token(
-                    settings.auth_service_url, settings.device_id, settings.device_secret
-                )
+                token = _get_token(settings.auth_service_url, settings.device_id, _secret)
 
             state = generate_physical_state(state)
             state["auth"] = {

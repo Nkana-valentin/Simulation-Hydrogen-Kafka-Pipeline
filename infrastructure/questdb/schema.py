@@ -24,6 +24,10 @@ def load_schema(config_path: str = "TSDB.yml") -> Dict[str, Any]:
             config = yaml.safe_load(f)
     except FileNotFoundError:
         config = {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Malformed TSDB config at {config_path!r}: {exc}") from exc
+    except OSError as exc:
+        raise ValueError(f"Cannot read TSDB config at {config_path!r}: {exc}") from exc
 
     tsdb = config.get("tsdb_schema", {})
 

@@ -25,7 +25,9 @@ class QuestDBClient:
 
     def table_exists(self, table_name: str) -> bool:
         result = self._exec(f"SELECT * FROM tables() WHERE table_name = '{table_name}'")
-        return bool(result and result.get("count", 0) > 0)
+        if not result or "error" in result:
+            return False
+        return bool(result.get("count", 0) > 0)
 
     def create_table(self, table_name: str, schema: Dict[str, Any]) -> bool:
         if self.table_exists(table_name):

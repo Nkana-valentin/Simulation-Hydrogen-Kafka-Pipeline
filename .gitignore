@@ -1,3 +1,7 @@
+# Project runtime data — never commit database or synced output
+questdb_data/
+synced_data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc

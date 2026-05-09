@@ -118,7 +118,7 @@ async def test_ssh(
         host=settings.ssh_host,
         user=settings.ssh_user,
         key_path=settings.ssh_key_path,
-        password=settings.ssh_password,
+        password=settings.ssh_password.get_secret_value(),
     )
     return client.test_connectivity()
 
@@ -135,7 +135,7 @@ async def get_remote_config(
             "user": settings.ssh_user,
             "remote_path": settings.ssh_remote_path,
             "key_path": settings.ssh_key_path,
-            "password_set": bool(settings.ssh_password),
+            "password_set": bool(settings.ssh_password.get_secret_value()),
         },
     }
 
