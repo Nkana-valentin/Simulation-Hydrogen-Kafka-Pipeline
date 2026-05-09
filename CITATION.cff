@@ -6,6 +6,10 @@ authors:
   - family-names: "Nkana Ngan"
     given-names: "Valentin"
     email: valentin.nkana@gmail.com
+  - family-names: "de Luca"
+    given-names: "Mariarita"
+  - family-names: "Rozza"
+    given-names: "Gianluigi"
 repository-code: "https://github.com/Nkana-valentin/Simulation-Hydrogen-Kafka-Pipeline"
 license: "MIT"
 abstract: "A containerized real-time hydrogen telemetry simulation and data pipeline using Kafka, QuestDB, FastAPI, Prometheus, and Grafana."

@@ -326,7 +326,7 @@ If you use this software in your research, please cite it using the metadata in 
 
 ```bibtex
 @software{nkana_ngan_valentin_simulation_hydrogen_kafka_pipeline,
-  author  = {Nkana Ngan, Valentin},
+  author  = {Nkana Ngan, Valentin and de Luca, Mariarita and Rozza, Gianluigi},
   title   = {Simulation Hydrogen Kafka Pipeline},
   license = {MIT},
   url     = {https://github.com/Nkana-valentin/Simulation-Hydrogen-Kafka-Pipeline}
