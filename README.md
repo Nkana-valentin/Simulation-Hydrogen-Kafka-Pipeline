@@ -320,6 +320,19 @@ python3 -m cmd.consumer
 | Grafana panels show no data | Wrong table selected | Switch dropdown to `validated_h2_data` |
 | Grafana datasource error | QuestDB not reachable | Verify `custom_questdb:8812` is up |
 
+## Citation
+
+If you use this software in your research, please cite it using the metadata in [CITATION.cff](CITATION.cff):
+
+```bibtex
+@software{nkana_ngan_valentin_simulation_hydrogen_kafka_pipeline,
+  author  = {Nkana Ngan, Valentin},
+  title   = {Simulation Hydrogen Kafka Pipeline},
+  license = {MIT},
+  url     = {https://github.com/Nkana-valentin/Simulation-Hydrogen-Kafka-Pipeline}
+}
+```
+
 ## License
 
 This project is licensed under the terms of the [LICENSE](LICENSE) file.
