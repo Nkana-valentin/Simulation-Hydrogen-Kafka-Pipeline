@@ -118,12 +118,11 @@ QUESTDB_PASSWORD=quest
 VALIDATED_TABLE=validated_h2_data   # QuestDB table name, not a Kafka topic
 
 # JWT — use a strong random value in any non-local deployment
-JWT_SECRET=change-me-in-production
+JWT_SECRET=change-me-in-production-must-be-32-chars-min
 
 # Device credentials (producer authenticates with these)
-DEVICE_ID=simulation_device_01
-DEVICE_SECRET=your-device-secret
-
+DEVICE_SECRET=sim-device-secret-01
+AUTH_SERVICE_URL=http://fastapi_app:8000
 # Sync worker
 BATCH_SIZE=50
 SYNC_INTERVAL=30s
